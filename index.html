@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!--
+  ======================================================================
+  GEOPORTAL "Mapeamento de Risco Climático de Maricá-RJ" — frontend estático
+  VERSÃO: v2.0.0 (nuvem: Supabase + GitHub Pages, novembro/2026)
+  Dados: Supabase (PostgreSQL/PostGIS + API REST PostgREST), chave pública + RLS
+  Hospedagem: GitHub Pages (arquivos estáticos, sem servidor próprio)
+  Dependências (CDN, versões fixas): OpenLayers 9.2.4 | h3-js 4.1.0 | shpjs 4.0.4 |
+                                     turf 6.5.0 | Chart.js 4.4.4
+  Configuração: js/config.js | Lógica: js/app.js | Estilo: css/estilo.css
+
+  CHANGELOG
+  v1.0.0 Versão local (Docker: PostGIS + GeoServer + Nginx). Ver registro de decisões.
+  v2.0.0 Migração para Supabase + GitHub Pages:
+         - GeoServer removido: grade e distritos vêm da API REST do Supabase;
+           a simbologia (Jenks, 5 classes) é aplicada no navegador a partir de
+           RISK_BREAKS — mapa e legenda passam a ter UMA fonte (quebras e cores
+           conferidas com o SLD indicador_final_jenks5).
+         - Hexágonos reconstruídos do h3_index com h3-js (1 pedido de ~2 MB).
+         - Distritos desenhados só como contorno (não mascaram mais a grade).
+         - Clique, filtro, upload e exportação rodam localmente (sem WFS).
+         - Upload: média simples + média ponderada por área; suporte a linhas.
+         - Novo painel "Camadas do Supabase" (catálogo + conexão manual).
+         - Exportação: GeoJSON, KML e CSV (GeoPackage exigia o GeoServer).
+         - Barras do dashboard em escala 1–5 (antes começavam em 0).
+  ======================================================================
+  -->
+  <title>Mapeamento de Risco Climático de Maricá-RJ</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@9.2.4/ol.css">
+  <link rel="stylesheet" href="css/estilo.css">
+</head>
+<body>
+<div id="app">
+  <button id="sidebar-toggle" aria-label="Abrir/fechar painel" aria-expanded="true">☰</button>
+
+  <aside id="sidebar">
+    <h1>Mapeamento de Risco Climático de Maricá-RJ</h1>
+    <div class="subtitle">Geoportal — grade hexagonal H3, resolução 10</div>
+    <div id="conn-status" class="conn-status">Conectando ao banco…</div>
+
+    <h2>Mapa base</h2>
+    <div class="control-group">
+      <select id="basemap-select" aria-label="Mapa base">
+        <option value="osm" selected>OpenStreetMap</option>
+        <option value="positron">Claro (CARTO Positron)</option>
+        <option value="dark">Escuro (CARTO Dark Matter)</option>
+        <option value="satellite">Satélite (Esri)</option>
+        <option value="topo">Topográfico (OpenTopoMap)</option>
+      </select>
+    </div>
+
+    <h2>Buscar endereço</h2>
+    <div class="control-group">
+      <input type="text" id="search-input" placeholder="Ex: Rua Beira Mar, Maricá" aria-label="Endereço">
+    </div>
+    <button class="btn btn-primary" id="search-btn">Buscar no mapa</button>
+    <button class="btn btn-secondary" id="clear-marker-btn">Limpar marcador</button>
+    <div id="search-status" class="status-text"></div>
+
+    <h2>Camadas</h2>
+    <div class="control-group checkbox-row">
+      <input type="checkbox" id="toggle-hex" checked>
+      <label for="toggle-hex">Grade hexagonal (indicador de risco)</label>
+    </div>
+    <div class="control-group checkbox-row">
+      <input type="checkbox" id="toggle-distritos" checked>
+      <label for="toggle-distritos">Limites distritais</label>
+    </div>
+    <div class="control-group checkbox-row nested">
+      <input type="checkbox" id="toggle-distritos-labels">
+      <label for="toggle-distritos-labels" class="small-label">Mostrar nomes dos distritos</label>
+    </div>
+    <div class="control-group">
+      <label for="opacity-slider">Opacidade da grade (<span id="opacity-value">100</span>%)</label>
+      <input type="range" id="opacity-slider" min="0" max="100" value="100">
+    </div>
+    <div class="hint-text">Clique em um hexágono para abrir o painel com os indicadores que compõem o risco daquela célula. Clique nas classes da legenda para ocultá-las ou exibi-las.</div>
+
+    <h2>Filtrar por indicador</h2>
+    <div class="control-group two-cols">
+      <div>
+        <label for="filter-min">Mínimo</label>
+        <input type="number" id="filter-min" step="any" placeholder="ex: 2.47">
+      </div>
+      <div>
+        <label for="filter-max">Máximo</label>
+        <input type="number" id="filter-max" step="any" placeholder="ex: 3.59">
+      </div>
+    </div>
+    <button class="btn btn-primary" id="apply-filter">Aplicar filtro</button>
+    <button class="btn btn-secondary" id="clear-filter">Limpar filtro</button>
+    <div id="filter-status" class="status-text"></div>
+
+    <h2>Camadas do Supabase</h2>
+    <div id="catalog-list"><div class="hint-text">Carregando catálogo…</div></div>
+    <details class="manual-connect">
+      <summary>Conectar outra tabela/view</summary>
+      <div class="control-group">
+        <label for="manual-table">Nome da tabela ou view (geometria em EPSG:4326)</label>
+        <input type="text" id="manual-table" placeholder="ex: vw_minha_camada" autocomplete="off">
+      </div>
+      <div class="control-group two-cols">
+        <div>
+          <label for="manual-color">Cor</label>
+          <input type="color" id="manual-color" value="#ff7f00">
+        </div>
+        <div>
+          <label for="manual-title">Título</label>
+          <input type="text" id="manual-title" placeholder="opcional">
+        </div>
+      </div>
+      <button class="btn btn-secondary" id="manual-connect-btn">Conectar camada</button>
+      <div id="manual-status" class="status-text"></div>
+    </details>
+
+    <h2>Upload de camada</h2>
+    <div class="control-group">
+      <input type="file" id="upload-input" accept=".kml,.zip" aria-label="Arquivo KML ou Shapefile zip">
+    </div>
+    <div class="hint-text">
+      <strong>KML:</strong> envie o arquivo .kml diretamente.<br>
+      <strong>Shapefile:</strong> compacte .shp, .shx, .dbf e .prj em um único .zip (o .prj é obrigatório).<br>
+      Pontos, linhas e polígonos. O arquivo é processado só no seu navegador — nada é enviado ao servidor.
+    </div>
+    <button class="btn btn-secondary" id="clear-upload-btn">Remover camada carregada</button>
+    <div id="upload-status" class="status-text"></div>
+    <div id="upload-results"></div>
+
+    <h2>Exportar dados</h2>
+    <div class="export-group">
+      <div class="export-group-title">Grade hexagonal (respeita o filtro ativo)</div>
+      <div class="export-buttons">
+        <button class="btn btn-secondary" data-export="hex" data-format="geojson">GeoJSON</button>
+        <button class="btn btn-secondary" data-export="hex" data-format="kml">KML</button>
+        <button class="btn btn-secondary" data-export="hex" data-format="csv">CSV</button>
+      </div>
+    </div>
+    <div class="export-group">
+      <div class="export-group-title">Limites distritais</div>
+      <div class="export-buttons">
+        <button class="btn btn-secondary" data-export="distritos" data-format="geojson">GeoJSON</button>
+        <button class="btn btn-secondary" data-export="distritos" data-format="kml">KML</button>
+      </div>
+    </div>
+    <div class="hint-text">Arquivos gerados em EPSG:4326 (WGS 84). Para GeoPackage ou análises no SRC do projeto (EPSG:31983), conecte o QGIS direto ao banco Supabase (ver README).</div>
+
+    <div id="source-note">
+      Tesselação hexagonal H3 originada do projeto <strong>Estudo Estratégico de adaptação climática com soluções baseadas na natureza para o município de Maricá-RJ</strong>.
+      Dados classificados em 5 classes por quebras naturais (Jenks).
+    </div>
+  </aside>
+
+  <main id="map-wrapper">
+    <div id="map" tabindex="0" aria-label="Mapa"></div>
+
+    <div id="loading-overlay" role="status">
+      <div class="spinner"></div>
+      <div id="loading-text">Carregando dados do Supabase…</div>
+    </div>
+
+    <div id="legend-stack">
+      <div class="legend" id="distritos-legend">
+        <div class="legend-row">
+          <span class="swatch-line"></span>
+          <span class="legend-label">Limite distrital</span>
+        </div>
+      </div>
+      <div class="legend" id="risk-legend">
+        <div class="legend-title">Índice de Risco Climático</div>
+        <div id="risk-legend-rows"></div>
+      </div>
+    </div>
+
+    <div id="info-panel" class="info-panel" hidden>
+      <button class="info-close" id="info-close" aria-label="Fechar">&times;</button>
+      <div id="info-content"></div>
+    </div>
+
+    <div id="search-marker">📍</div>
+  </main>
+
+  <!-- Dashboard modal: aberto ao clicar em um hexágono -->
+  <div id="dashboard-overlay">
+    <div id="dashboard-card" role="dialog" aria-modal="true" aria-labelledby="dash-title">
+      <button id="dashboard-close" aria-label="Fechar">&times;</button>
+      <div class="dash-h3id">Célula H3: <span id="dash-h3id">-</span></div>
+
+      <div class="dash-final-wrap">
+        <div class="dash-final-caption" id="dash-title">Índice de Risco Climático Final</div>
+        <div class="dash-final-value" id="dash-final-value">-</div>
+        <div class="dash-final-badge" id="dash-final-badge">-</div>
+      </div>
+
+      <div class="dash-section-title">Mapas intermediários (escala 1–5)</div>
+      <div id="dash-bars"></div>
+
+      <div class="dash-radar-section">
+        <div class="dash-section-title">Grupos que compõem os mapas</div>
+        <div class="dash-radar-wrap">
+          <canvas id="dash-radar-canvas"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/ol@9.2.4/dist/ol.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/h3-js@4.1.0/dist/h3-js.umd.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/shpjs@4.0.4/dist/shp.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@turf/turf@6.5.0/turf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script src="js/config.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
