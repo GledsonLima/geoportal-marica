@@ -6,7 +6,7 @@
   <!--
   ======================================================================
   GEOPORTAL "Mapeamento de Risco Climático de Maricá-RJ" — frontend estático
-  VERSÃO: v2.0.0 (nuvem: Supabase + GitHub Pages, novembro/2026)
+  VERSÃO: v2.1.0 (nuvem: Supabase + GitHub Pages, novembro/2026)
   Dados: Supabase (PostgreSQL/PostGIS + API REST PostgREST), chave pública + RLS
   Hospedagem: GitHub Pages (arquivos estáticos, sem servidor próprio)
   Dependências (CDN, versões fixas): OpenLayers 9.2.4 | h3-js 4.1.0 | shpjs 4.0.4 |
@@ -15,6 +15,9 @@
 
   CHANGELOG
   v1.0.0 Versão local (Docker: PostGIS + GeoServer + Nginx). Ver registro de decisões.
+  v2.1.0 Carga em duas fases (função hex_mapa_web, script 04) com detalhe da célula sob demanda;
+         radar com rótulos quebrados em telas estreitas; menu sem animação ao carregar e que
+         fecha ao tocar no mapa; cores e medidas centralizadas em variáveis CSS (:root).
   v2.0.0 Migração para Supabase + GitHub Pages:
          - GeoServer removido: grade e distritos vêm da API REST do Supabase;
            a simbologia (Jenks, 5 classes) é aplicada no navegador a partir de
@@ -31,13 +34,20 @@
   -->
   <title>Mapeamento de Risco Climático de Maricá-RJ</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@9.2.4/ol.css">
-  <link rel="stylesheet" href="css/estilo.css">
+  <link rel="stylesheet" href="css/estilo.css?v=2.1.0">
 </head>
 <body>
 <div id="app">
   <button id="sidebar-toggle" aria-label="Abrir/fechar painel" aria-expanded="true">☰</button>
 
   <aside id="sidebar">
+    <!-- LOGOS (opcional): coloque as imagens na pasta img/ , apague as marcas de comentário
+         (a seta de abertura e a de fechamento) e ajuste os nomes dos arquivos.
+    <div class="logos">
+      <img src="img/logo-instituicao.png" alt="Nome da instituição">
+      <img src="img/logo-projeto.png" alt="Nome do projeto">
+    </div>
+    -->
     <h1>Mapeamento de Risco Climático de Maricá-RJ</h1>
     <div class="subtitle">Geoportal — grade hexagonal H3, resolução 10</div>
     <div id="conn-status" class="conn-status">Conectando ao banco…</div>
@@ -213,7 +223,7 @@
 <script src="https://cdn.jsdelivr.net/npm/shpjs@4.0.4/dist/shp.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6.5.0/turf.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
-<script src="js/config.js"></script>
-<script src="js/app.js"></script>
+<script src="js/config.js?v=2.1.0"></script>
+<script src="js/app.js?v=2.1.0"></script>
 </body>
 </html>

@@ -1,4 +1,4 @@
-# Geoportal — Mapeamento de Risco Climático de Maricá-RJ (v2.0.0, nuvem)
+# Geoportal — Mapeamento de Risco Climático de Maricá-RJ (v2.1.0, nuvem)
 
 Versão em nuvem do geoportal: **banco e API no Supabase** + **site estático no GitHub Pages**.
 Substitui o conjunto local Docker (PostGIS + GeoServer + Nginx) da v1.0.0 sem perder funções.
@@ -37,6 +37,8 @@ os indicadores (~2 MB) em vez de 23.849 polígonos.
 | `supabase/01_ativar_postgis.sql` | Passo 1 (antes da importação) |
 | `supabase/02_preparar_tabelas_e_api.sql` | Passo 3 (depois da importação) |
 | `supabase/03_modelo_nova_camada.sql` | Modelo para publicar camadas extras no catálogo |
+| `supabase/04_otimizar_carga.sql` | Opcional, recomendado: carga do mapa ~8x mais leve (ver abaixo) |
+| `PERSONALIZAR.md` | Guia para mudar cores, logos, layout e textos |
 
 > Não coloque no GitHub: `.gpkg`, `.dump`, shapefiles brutos, nem **nenhuma senha**.
 > O repositório do GitHub Pages gratuito é **público**.
@@ -119,6 +121,13 @@ Depois, abra **Advisors → Security Advisor** no painel e confira se não há a
 
 ---
 
+### Passo 3b (recomendado) — Carga mais rápida
+
+Cole `supabase/04_otimizar_carga.sql` → **Run** (resultado esperado: `23849`). Ele cria a função
+`hex_mapa_web()`, que entrega só `h3_index` + `indicador_final` (~0,3 MB em vez de 2,6 MB). O site
+a usa automaticamente e busca os outros 12 indicadores só do hexágono que você clica. Sem este
+passo o site continua funcionando, apenas mais devagar.
+
 ## Passo 4 — Testar a API (navegador)
 
 Cole na barra de endereço (troque `CHAVE_ANON` pela chave de `js/config.js`):
@@ -160,6 +169,22 @@ o Pages republica sozinho.
 
 ---
 
+## Atualizar o site depois de receber uma versão nova
+
+1. No repositório do GitHub, entre em cada pasta e use *Add file → Upload files* para enviar os
+   arquivos novos com o **mesmo nome** (ele substitui o antigo): `index.html`, `css/estilo.css`,
+   `js/app.js`, `js/config.js` (e, se houver, `supabase/…`). *Commit changes*.
+2. Rode no Supabase os scripts SQL novos que acompanham a versão (ex.: o `04`).
+3. Aguarde ~1 minuto e abra o site com **Ctrl+F5**.
+
+> Atenção: se você já mudou `js/config.js`, não o substitua sem conferir; mantenha sua URL e chave.
+
+## Shapefile no upload: acentos
+
+Envie junto o arquivo `.cpg` (já é gerado pelo QGIS). Sem ele, nomes com acento de shapefiles
+em codificação antiga (Windows-1252/ISO-8859-1) podem aparecer com caracteres trocados (ex.: "�rea").
+O `.prj` continua obrigatório: é ele que permite reprojetar de UTM/SIRGAS para o mapa.
+
 ## Publicar uma camada nova no painel "Camadas do Supabase"
 
 A chave pública **não consegue listar** as tabelas do banco (bloqueio de segurança do Supabase),
@@ -199,7 +224,7 @@ Daí dá para analisar no SRC do projeto (EPSG:31983) e exportar GeoPackage.
 - **Pausa por inatividade:** projetos Free podem ser pausados após ~1 semana de baixa atividade.
   O site mostrará "Não foi possível contatar o Supabase"; reative no painel (*Restore project*).
 - **Banco:** 500 MB (a grade ocupa poucos MB). **Tráfego (egress):** ~5 GB/mês não cacheados —
-  cada visita baixa ~2 MB de dados, ou seja, na ordem de 2 mil visitas/mês.
+  sem o script 04 cada visita baixa ~2,6 MB (≈2 mil visitas/mês); com o script 04, ~0,3 MB (≈15 mil visitas/mês).
 - **Sem backup baixável** no Free: mantenha os `.gpkg` originais e faça `pg_dump` periódico
   (pela string do Session pooler).
 - Se o tráfego crescer, a alternativa barata é publicar um retrato estático dos indicadores

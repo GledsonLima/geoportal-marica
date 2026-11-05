@@ -18,7 +18,9 @@ window.GEOPORTAL_CONFIG = {
   SUPABASE_ANON_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlpdGpid3VvcGpncnNtbmRjenhoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTM4MDIyMDEsImV4cCI6MjEwOTM3ODIwMX0.P5_PMzXnh9f9MAnoF4CEEKTCIhAlgaALfrbq5c11eLc',
 
   // Objetos publicados no banco (criados pelo script 02)
-  RPC_HEX: 'hex_dados_web',              // função que devolve os indicadores
+  RPC_HEX_LEVE: 'hex_mapa_web',          // função leve (script 04): só h3_index + indicador_final
+  RPC_HEX: 'hex_dados_web',              // função completa (script 02): todos os indicadores
+  TABELA_HEX: 'hex_indicadores_completos', // tabela consultada no clique (detalhe de uma célula)
   VIEW_DISTRITOS: 'vw_limites_distritais',
   TABELA_CATALOGO: 'catalogo_camadas',
 

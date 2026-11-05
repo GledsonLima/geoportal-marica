@@ -1,5 +1,5 @@
 /* =====================================================================
-   Geoportal "Mapeamento de Risco Climático de Maricá-RJ" — v2.0.0
+   Geoportal "Mapeamento de Risco Climático de Maricá-RJ" — v2.1.0
    Lógica do frontend estático (GitHub Pages) + Supabase (PostgREST)
 
    Fluxo de ponta a ponta:
@@ -216,7 +216,10 @@
 
   // ================= 4. DADOS DA GRADE (RPC + h3-js) =================
   let hexCampos = [];               // nomes das colunas devolvidas pela RPC
+  let modoLeve = false;             // true: a grade veio só com h3_index + indicador_final
+  let dadosCompletos = null;        // todos os campos, baixados só se precisar (exportação)
   const hexPorId = new Map();       // h3_index -> ol.Feature (busca O(1) para pontos)
+  const detalhesCache = new Map();  // h3_index -> indicadores completos da célula (modo leve)
 
   /** Contorno do hexágono em [lon, lat] (anel fechado), a partir do índice H3. */
   function contornoH3(id) {
@@ -226,11 +229,52 @@
     return anel;
   }
 
+  /**
+   * Carga em duas fases. Fase 1 (esta): só h3_index + indicador_final (~0,3 MB comprimido)
+   * já bastam para desenhar o mapa, o filtro e o upload. Fase 2: os demais 12 indicadores
+   * de UMA célula são buscados só quando ela é clicada (ver detalhesDaCelula).
+   * Se a função leve ainda não existe no banco (script 04), usa a função completa.
+   */
+  async function baixarGrade() {
+    try {
+      const d = await sbGet('rpc/' + (CFG.RPC_HEX_LEVE || 'hex_mapa_web'));
+      if (d && Array.isArray(d.campos) && Array.isArray(d.linhas)) return { dados: d, leve: true };
+    } catch (e) {
+      if (!(e.code === 'PGRST202' || e.status === 404)) throw e;   // outro erro: não mascarar
+    }
+    setLoading('Baixando indicadores da grade (≈2,6 MB)…');
+    return { dados: await sbGet('rpc/' + (CFG.RPC_HEX || 'hex_dados_web')), leve: false };
+  }
+
+  /** Indicadores completos de uma célula (modo leve): 1 pedido pequeno, com cache. */
+  async function detalhesDaCelula(id) {
+    if (detalhesCache.has(id)) return detalhesCache.get(id);
+    if (!/^[0-9a-f]{15}$/.test(id)) throw new Error('h3_index inválido.');
+    const campos = ['h3_index', 'indicador_final']
+      .concat(INTERMEDIATE_MAPS.map((m) => m.field), GROUP_FIELDS.map((g) => g.field)).join(',');
+    const r = await sbGet((CFG.TABELA_HEX || 'hex_indicadores_completos') + '?select=' + campos + '&h3_index=eq.' + id);
+    if (!r.length) throw new Error('Célula não encontrada no banco.');
+    detalhesCache.set(id, r[0]);
+    return r[0];
+  }
+
+  /** Todos os campos de todas as células (só para exportar no modo leve). */
+  async function obterDadosCompletos() {
+    if (!dadosCompletos) {
+      const d = await sbGet('rpc/' + (CFG.RPC_HEX || 'hex_dados_web'));
+      const iId = d.campos.indexOf('h3_index'), porId = new Map();
+      d.linhas.forEach((l) => porId.set(l[iId], l));
+      dadosCompletos = { campos: d.campos, porId };
+    }
+    return dadosCompletos;
+  }
+
   async function carregarGrade() {
-    setLoading('Baixando indicadores da grade (≈2 MB)…');
-    const dados = await sbGet('rpc/' + (CFG.RPC_HEX || 'hex_dados_web'));
+    setLoading('Baixando indicadores da grade…');
+    const { dados, leve } = await baixarGrade();
+    modoLeve = leve;
     if (!dados || !Array.isArray(dados.campos) || !Array.isArray(dados.linhas)) {
-      throw new Error('Resposta inesperada da função hex_dados_web (sem "campos"/"linhas").');
+      throw new Error('Resposta inesperada da função da grade (sem "campos"/"linhas").');
     }
     hexCampos = dados.campos;
     const iId = hexCampos.indexOf('h3_index');
@@ -420,17 +464,38 @@
 
   // Painel recolhível no celular
   const appEl = $('app');
-  if (window.matchMedia('(max-width: 760px)').matches) { appEl.classList.add('sidebar-fechada'); $('sidebar-toggle').setAttribute('aria-expanded', 'false'); }
-  $('sidebar-toggle').addEventListener('click', () => {
-    const fechada = appEl.classList.toggle('sidebar-fechada');
-    $('sidebar-toggle').setAttribute('aria-expanded', String(!fechada));
+  const menuAberto = () => !appEl.classList.contains('sidebar-fechada');
+  function alternarMenu(abrir) {
+    appEl.classList.add('animar-menu');   // a animação só vale depois do primeiro uso (sem "pulo" ao carregar)
+    appEl.classList.toggle('sidebar-fechada', !abrir);
+    $('sidebar-toggle').setAttribute('aria-expanded', String(abrir));
     setTimeout(() => map.updateSize(), 250);
-  });
+  }
+  if (window.matchMedia('(max-width: 760px)').matches) { appEl.classList.add('sidebar-fechada'); $('sidebar-toggle').setAttribute('aria-expanded', 'false'); }
+  $('sidebar-toggle').addEventListener('click', () => alternarMenu(!menuAberto()));
 
   // ================= 8. DASHBOARD (modal) =================
   const dashboardOverlay = $('dashboard-overlay');
   let radarChart = null;
-  function closeDashboard() { dashboardOverlay.style.display = 'none'; }
+  let cliqueToken = 0;   // descarta respostas atrasadas se o usuário clicar em outra célula
+  function closeDashboard() { cliqueToken++; dashboardOverlay.style.display = 'none'; }
+
+  /** Quebra o nome do eixo do radar em linhas curtas (evita corte em telas estreitas). */
+  function quebraRotulo(txt, max) {
+    const linhas = []; let atual = '';
+    String(txt).split(' ').forEach((p) => {
+      if (atual && (atual + ' ' + p).length > max) { linhas.push(atual); atual = p; }
+      else atual = atual ? atual + ' ' + p : p;
+    });
+    if (atual) linhas.push(atual);
+    return linhas;
+  }
+  const telaEstreita = () => window.innerWidth < 520;
+
+  function mostrarCarregandoDashboard(msg, erro) {
+    $('dash-bars').innerHTML = '<div class="dash-loading' + (erro ? ' erro' : '') + '">' + esc(msg) + '</div>';
+    if (radarChart) { radarChart.destroy(); radarChart = null; }
+  }
   $('dashboard-close').addEventListener('click', closeDashboard);
   dashboardOverlay.addEventListener('click', (e) => { if (e.target === dashboardOverlay) closeDashboard(); });
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { closeDashboard(); fecharInfo(); } });
@@ -441,6 +506,14 @@
     $('dash-final-value').textContent = num(vf, 2);
     const badge = $('dash-final-badge');
     badge.textContent = cat.label; badge.style.background = cat.color; badge.style.color = cat.text;
+
+    // Modo leve: só o índice final chegou; os detalhes são buscados e este método é chamado de novo.
+    if (props.indicador_mapa1 === undefined) {
+      mostrarCarregandoDashboard('Carregando detalhes da célula…');
+      dashboardOverlay.style.display = 'flex';
+      $('dashboard-close').focus();
+      return;
+    }
 
     // Barras em escala 1–5: 1 = barra vazia, 5 = barra cheia.
     // A cor usa as quebras do indicador FINAL só como referência visual
@@ -469,8 +542,11 @@
       },
       options: {
         responsive: true, maintainAspectRatio: false,
+        layout: { padding: telaEstreita() ? { left: 4, right: 4 } : 0 },
         scales: { r: { min: 1, max: 5, ticks: { stepSize: 1, backdropColor: 'transparent', font: { size: 9 } },
-          pointLabels: { font: { size: 10 }, color: '#1e2a38' }, grid: { color: '#e5e9ee' }, angleLines: { color: '#e5e9ee' } } },
+          pointLabels: { font: { size: telaEstreita() ? 9 : 10 }, color: '#1e2a38',
+            callback: (rotulo) => quebraRotulo(rotulo, telaEstreita() ? 14 : 18) },
+          grid: { color: '#e5e9ee' }, angleLines: { color: '#e5e9ee' } } },
         plugins: { legend: { display: false },
           tooltip: { callbacks: { label: (ctx) => 'Valor: ' + num(ctx.parsed.r, 2) } } }
       }
@@ -495,6 +571,8 @@
   }
 
   map.on('singleclick', (evt) => {
+    // No celular, tocar no mapa com o menu aberto apenas fecha o menu.
+    if (menuAberto() && matchMedia('(max-width: 760px)').matches) { alternarMenu(false); return; }
     // 1º: camadas do catálogo e upload (estão por cima da grade)
     let achou = null;
     map.forEachFeatureAtPixel(evt.pixel, (f, layer) => { achou = { f, layer }; return true; }, {
@@ -510,7 +588,15 @@
     if (!hexLayer.getVisible()) return;
     const cand = hexSource.getFeaturesAtCoordinate(evt.coordinate)
       .filter((f) => passaFiltro(f.get('indicador_final')));
-    if (cand.length) { fecharInfo(); openDashboard(cand[0].getProperties()); }
+    if (!cand.length) return;
+    fecharInfo();
+    const f = cand[0], props = f.getProperties();
+    openDashboard(props);                       // mostra já o índice final
+    if (!modoLeve) return;                      // modo completo: nada mais a buscar
+    const meuToken = ++cliqueToken;
+    detalhesDaCelula(f.getId())
+      .then((p) => { if (meuToken === cliqueToken) openDashboard(p); })
+      .catch((e) => { if (meuToken === cliqueToken) mostrarCarregandoDashboard('Não foi possível carregar os detalhes: ' + e.message, true); });
   });
   map.on('pointermove', (evt) => {
     if (evt.dragging) return;
@@ -766,31 +852,50 @@
   const hexVisiveis = () => hexSource.getFeatures().filter((f) => passaFiltro(f.get('indicador_final')));
   function propsLimpos(f) { const p = f.getProperties(); delete p.geometry; Object.keys(p).forEach((k) => { if (k.startsWith('_')) delete p[k]; }); return p; }
 
-  document.querySelectorAll('[data-export]').forEach((btn) => btn.addEventListener('click', () => {
+  // Propriedades de cada hexágono para exportar. No modo leve a grade só tem 2 campos;
+  // então os demais são baixados (uma vez) da função completa, só na hora de exportar.
+  async function prepararExportacao(alvo, feats) {
+    if (alvo === 'hex' && modoLeve) {
+      const dc = await obterDadosCompletos();
+      return {
+        campos: dc.campos,
+        propsDe: (f) => { const l = dc.porId.get(f.getId()), o = {}; if (l) dc.campos.forEach((c, i) => { o[c] = l[i]; }); return o; }
+      };
+    }
+    return { campos: hexCampos.length && alvo === 'hex' ? hexCampos : Object.keys(propsLimpos(feats[0])), propsDe: propsLimpos };
+  }
+
+  document.querySelectorAll('[data-export]').forEach((btn) => btn.addEventListener('click', async () => {
     const alvo = btn.dataset.export, fmt = btn.dataset.format;
     const feats = alvo === 'hex' ? hexVisiveis() : distritosSource.getFeatures();
     if (!feats.length) { alert('Não há feições para exportar (dados ainda carregando ou filtro vazio).'); return; }
     const base = alvo === 'hex' ? 'marica_hex_indicadores' : 'marica_limites_distritais';
-    if (fmt === 'csv') {
-      const campos = hexCampos.length ? hexCampos : Object.keys(propsLimpos(feats[0]));
-      const q = (v) => (v === null || v === undefined) ? '' : (/[",;\n]/.test(String(v)) ? '"' + String(v).replace(/"/g, '""') + '"' : String(v));
-      const linhas = [campos.join(',')].concat(feats.map((f) => campos.map((c) => q(f.get(c))).join(',')));
-      baixar('﻿' + linhas.join('\n'), base + '.csv', 'text/csv;charset=utf-8');
-    } else if (fmt === 'geojson') {
-      let fc;
-      if (alvo === 'hex') { // geometria exata direto do H3, em graus (sem ida e volta pelo Web Mercator)
-        fc = { type: 'FeatureCollection', features: feats.map((f) => ({ type: 'Feature', properties: propsLimpos(f),
-          geometry: { type: 'Polygon', coordinates: [contornoH3(f.getId())] } })) };
-      } else {
-        fc = new ol.format.GeoJSON().writeFeaturesObject(feats.map((f) => { const c = f.clone(); c.unset('_ptRotulo', true); return c; }),
-          { featureProjection: 'EPSG:3857', dataProjection: 'EPSG:4326', decimals: 7 });
+    const rotulo = btn.textContent; btn.disabled = true; btn.textContent = '…';
+    try {
+      const { campos, propsDe } = await prepararExportacao(alvo, feats);
+      if (fmt === 'csv') {
+        const q = (v) => (v === null || v === undefined) ? '' : (/[",;\n]/.test(String(v)) ? '"' + String(v).replace(/"/g, '""') + '"' : String(v));
+        const linhas = [campos.join(',')].concat(feats.map((f) => { const p = propsDe(f); return campos.map((c) => q(p[c])).join(','); }));
+        baixar('﻿' + linhas.join('\n'), base + '.csv', 'text/csv;charset=utf-8');
+      } else if (fmt === 'geojson') {
+        let fc;
+        if (alvo === 'hex') { // geometria exata direto do H3, em graus (sem ida e volta pelo Web Mercator)
+          fc = { type: 'FeatureCollection', features: feats.map((f) => ({ type: 'Feature', properties: propsDe(f),
+            geometry: { type: 'Polygon', coordinates: [contornoH3(f.getId())] } })) };
+        } else {
+          fc = new ol.format.GeoJSON().writeFeaturesObject(feats.map((f) => { const c = f.clone(); c.unset('_ptRotulo', true); return c; }),
+            { featureProjection: 'EPSG:3857', dataProjection: 'EPSG:4326', decimals: 7 });
+        }
+        baixar(JSON.stringify(fc), base + '.geojson', 'application/geo+json');
+      } else if (fmt === 'kml') {
+        const limpos = feats.map((f) => { const c = new ol.Feature(f.getGeometry().clone()); c.setProperties(propsDe(f)); if (f.getId()) c.set('name', f.getId()); else if (f.get('nm_dist')) c.set('name', f.get('nm_dist')); return c; });
+        const kml = new ol.format.KML({ writeStyles: false }).writeFeatures(limpos, { featureProjection: 'EPSG:3857', decimals: 7 });
+        baixar(kml, base + '.kml', 'application/vnd.google-earth.kml+xml');
       }
-      baixar(JSON.stringify(fc), base + '.geojson', 'application/geo+json');
-    } else if (fmt === 'kml') {
-      const limpos = feats.map((f) => { const c = new ol.Feature(f.getGeometry().clone()); c.setProperties(propsLimpos(f)); if (f.getId()) c.set('name', f.getId()); else if (f.get('nm_dist')) c.set('name', f.get('nm_dist')); return c; });
-      const kml = new ol.format.KML({ writeStyles: false }).writeFeatures(limpos, { featureProjection: 'EPSG:3857', decimals: 7 });
-      baixar(kml, base + '.kml', 'application/vnd.google-earth.kml+xml');
-    }
+    } catch (e) {
+      console.error('Erro na exportação:', e);
+      alert('Não foi possível exportar: ' + e.message);
+    } finally { btn.disabled = false; btn.textContent = rotulo; }
   }));
 
   // ================= 13. INICIALIZAÇÃO =================
@@ -813,6 +918,7 @@
                  'Troque pela chave pública "anon" e gere uma nova chave secreta no painel do Supabase.', true);
       setConn('Chave secreta detectada — site bloqueado', 'erro'); return;
     }
+    carregarCatalogo();   // em paralelo: não depende da grade
     const tarefas = await Promise.allSettled([carregarGrade(), carregarDistritos()]);
     const [grade, distr] = tarefas;
     if (grade.status === 'rejected') {
@@ -830,10 +936,9 @@
       $('distritos-legend').style.display = 'none';
       if (grade.status === 'fulfilled') setConn($('conn-status').textContent + ' · distritos indisponíveis', 'ok');
     }
-    carregarCatalogo();
   }
   iniciar();
 
   // Exposto só para depuração no Console (F12): window.__geoportal
-  window.__geoportal = { map, hexSource, distritosSource, hexPorId, classifyRisk, RISK_BREAKS };
+  window.__geoportal = { map, hexSource, distritosSource, hexPorId, classifyRisk, RISK_BREAKS, modoLeve: () => modoLeve };
 })();
