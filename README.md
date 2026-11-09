@@ -1,4 +1,10 @@
-# Geoportal — Mapeamento de Risco Climático de Maricá-RJ (v2.1.0, nuvem)
+# SIGWEB SBN Maricá (v3.0.0, nuvem)
+
+> Antes chamado "Geoportal — Mapeamento de Risco Climático de Maricá-RJ".
+> A v3.0.0 traz a identidade SIGWEB SBN Maricá: barra superior com logo e busca,
+> faixa vertical de ícones com painéis, novos mapas base e o código dividido por assunto.
+> As Etapas 2 a 5 (camadas do índice, áreas prioritárias e fichas de SbN) virão em seguida.
+
 
 Versão em nuvem do geoportal: **banco e API no Supabase** + **site estático no GitHub Pages**.
 Substitui o conjunto local Docker (PostGIS + GeoServer + Nginx) da v1.0.0 sem perder funções.
@@ -29,15 +35,23 @@ os indicadores (~2 MB) em vez de 23.849 polígonos.
 
 | Arquivo | Para quê |
 |---|---|
-| `index.html` | Página do geoportal (estrutura) |
-| `css/estilo.css` | Aparência (inclui layout para celular) |
-| `js/config.js` | **URL do projeto e chave pública** — único arquivo a editar |
-| `js/app.js` | Lógica: mapa, dados, dashboard, catálogo, upload, exportação |
+| `index.html` | Página do portal (estrutura, textos e ordem dos blocos) |
+| `css/estilo.css` | Aparência — cores e medidas no bloco `:root` do topo |
+| `img/logo-marica.png` | Logo da barra superior |
+| `js/config.js` | **URL do projeto, chave pública e parâmetros do município** — comece por aqui |
+| `js/util.js` | Funções de apoio (texto, números, download) |
+| `js/api.js` | Conversa com a API REST do banco |
+| `js/mapa.js` | Mapa, mapas base, grade hexagonal, distritos, classificação e legenda |
+| `js/ferramentas.js` | Filtro, upload e análise, exportação, catálogo de camadas |
+| `js/painel.js` | Barra superior, busca, faixa de ícones, painéis, janela de detalhes |
+| `js/app.js` | Inicialização — **tem de ser o último** da lista no `index.html` |
 | `.nojekyll` | Diz ao GitHub Pages para servir os arquivos como estão |
 | `supabase/01_ativar_postgis.sql` | Passo 1 (antes da importação) |
 | `supabase/02_preparar_tabelas_e_api.sql` | Passo 3 (depois da importação) |
 | `supabase/03_modelo_nova_camada.sql` | Modelo para publicar camadas extras no catálogo |
 | `supabase/04_otimizar_carga.sql` | Opcional, recomendado: carga do mapa ~8x mais leve (ver abaixo) |
+| `supabase/05_camadas_do_indice.sql` | **Etapa 2**: devolve também Ameaça, Exposição e Vulnerabilidade |
+| `supabase/06_areas_prioritarias_e_sbn.sql` | **Etapa 3**: cria e preenche as 60 Áreas Prioritárias, os 5 temas e as 43 SbN |
 | `PERSONALIZAR.md` | Guia para mudar cores, logos, layout e textos |
 
 > Não coloque no GitHub: `.gpkg`, `.dump`, shapefiles brutos, nem **nenhuma senha**.
@@ -169,15 +183,86 @@ o Pages republica sozinho.
 
 ---
 
+## Passo 7 — As camadas novas (v3.1.0)
+
+São duas situações diferentes, e só uma delas é upload.
+
+### 7.1 Mapas intermediários — **não há nada para subir**
+
+Ameaça Climática, Exposição Socioambiental e Vulnerabilidade Climática **já estão no banco**,
+na mesma tabela e na mesma grade H3 do índice final (`hex_indicadores_completos`, colunas
+`indicador_mapa1`, `indicador_mapa2` e `indicador_mapa3`). Eles nunca foram "espacializados"
+porque a função que alimenta o mapa só devolvia o índice final.
+
+No **SQL Editor**, rode `supabase/05_camadas_do_indice.sql`. Ele troca a função `hex_mapa_web()`
+para devolver as cinco colunas de uma vez. Confira as três consultas do fim do arquivo:
+
+- a primeira tem de dar **23849**;
+- a segunda mostra mínimo e máximo de cada mapa — compare com as legendas do estudo
+  (Ameaça 1,31–3,21; Exposição 1,00–4,55; Vulnerabilidade 1,00–4,91);
+- a terceira conta quantas células caem exatamente em cima de uma quebra de classe.
+
+Recarregue o site com **Ctrl+F5**: as três camadas aparecem no painel *Camadas*. Enquanto o
+script não rodar, elas ficam desabilitadas com um aviso — nada quebra.
+
+### 7.2 Áreas Prioritárias por Temática — **esta sim é camada nova**
+
+São 60 polígonos de clusterização das piores áreas do mapeamento, cada um com `num_area`,
+ligados a 5 temas estratégicos, que por sua vez levam ao catálogo de Soluções Baseadas na
+Natureza (SbN).
+
+**Não precisa de ogr2ogr.** São só 60 polígonos (129 KB de geometria), então o próprio
+`supabase/06_areas_prioritarias_e_sbn.sql` já traz a geometria embutida em WKB hexadecimal,
+além dos temas, dos vínculos e das 43 soluções da planilha. Abra o arquivo num editor de texto,
+copie tudo, cole no **SQL Editor** e rode. Leva alguns segundos (o arquivo tem ~220 KB).
+
+O script é **idempotente**: pode rodar de novo sem duplicar nada. Ao final, confira:
+
+| Consulta | Esperado |
+|---|---|
+| `areas` | 60 |
+| `vinculos` | 90 |
+| `areas_com_tema` | 60 |
+| `solucoes` | 43 |
+| `geom_invalidas` | 0 |
+| `area_total_ha` | 3060.5 |
+
+Soluções por tema: 1 = 14, 2 = 13, 3 = 6, 4 = 6, 5 = 4.
+
+**Por que N:N entre área e tema:** 24 áreas têm dois temas e 3 têm três (por exemplo, a área 1
+é ao mesmo tempo Águas Urbanas, Costeira e Lagunar, e Infraestrutura Verde). Uma coluna
+`tema` única obrigaria a repetir o polígono ou a escolher um tema só.
+
+> Se preferir carregar o `.gpkg` por ogr2ogr (por exemplo, para atualizar as geometrias depois),
+> importe para `public.areas_60_import` e depois rode um `insert ... select` para
+> `areas_prioritarias`. O script 06 continua necessário para temas, vínculos e SbN.
+
+---
+
 ## Atualizar o site depois de receber uma versão nova
 
-1. No repositório do GitHub, entre em cada pasta e use *Add file → Upload files* para enviar os
-   arquivos novos com o **mesmo nome** (ele substitui o antigo): `index.html`, `css/estilo.css`,
-   `js/app.js`, `js/config.js` (e, se houver, `supabase/…`). *Commit changes*.
+1. No repositório do GitHub, use *Add file → Upload files* e arraste as pastas `css`, `js` e `img`
+   mais o `index.html`. Arquivos de mesmo nome e caminho são substituídos. *Commit changes*.
 2. Rode no Supabase os scripts SQL novos que acompanham a versão (ex.: o `04`).
 3. Aguarde ~1 minuto e abra o site com **Ctrl+F5**.
 
 > Atenção: se você já mudou `js/config.js`, não o substitua sem conferir; mantenha sua URL e chave.
+
+### Mapas base: por que a CARTO saiu
+
+Até a v2.1.0 as opções "Claro" e "Escuro" usavam `basemaps.cartocdn.com` sem chave. A CARTO
+encerrou esse acesso gratuito: a URL **continua respondendo HTTP 200 com um PNG válido**, mas o
+tile traz a marca d'água *"API KEY REQUIRED"*. Como a resposta é um sucesso para o navegador,
+**nenhum fallback automático detecta isso** — por isso a troca de provedor, e não só um remendo.
+
+Na v3.0.0, "Claro" e "Escuro" usam os *Canvas* da Esri (base + rótulos, sem chave, 24 níveis de
+zoom). Se quiser a CARTO de volta, crie uma conta gratuita em carto.com/basemaps e preencha
+`CARTO_API_KEY` em `js/config.js`: as opções CARTO passam a aparecer na lista. Lembre que essa
+chave, como a do banco, fica visível no navegador.
+
+Havia ainda um defeito menor na URL antiga: o marcador `{r}` (tile retina) é convenção do
+**Leaflet**; o OpenLayers não o substitui, e o navegador pedia `.../{y}%7Br%7D.png`. A CARTO
+ignorava o sufixo, então isso não quebrava nada — mas saiu junto.
 
 ## Shapefile no upload: acentos
 
@@ -216,6 +301,20 @@ Daí dá para analisar no SRC do projeto (EPSG:31983) e exportar GeoPackage.
 | Escrita pela API | Bloqueada (RLS sem política de escrita + `revoke`). |
 | Upload do usuário | Processado só no navegador; textos escapados contra XSS. |
 | Painel administrativo | O painel do Supabase exige login — não há mais `/geoserver/web` exposto. |
+| Consultas com parâmetro | Vão por RPC com argumentos tipados no banco; valores passam por `encodeURIComponent` e nomes de tabela por lista de caracteres permitidos. Nada é montado por concatenação de texto do usuário. |
+
+### "Por que a chave não fica num `.env`?"
+
+Porque não existe `.env` que o navegador leia. O GitHub Pages serve arquivos estáticos: não há
+servidor nem etapa de build. Mesmo adicionando um build (Vite + GitHub Actions), a chave seria
+**compilada dentro do JavaScript publicado** e continuaria visível no F12 — seria segurança
+aparente, com uma engrenagem a mais para manter.
+
+A chave `anon` foi feita para ser pública: ela **identifica** o projeto, não **autoriza** nada.
+Quem decide o que pode ser lido é o RLS no banco. É o mesmo modelo de uma chave de Google Maps JS.
+Quem precisa esconder credenciais de verdade (por exemplo, para permitir escrita) tem de pôr um
+servidor no meio — uma Edge Function do Supabase ou um Worker da Cloudflare —, o que muda a
+arquitetura e acrescenta latência. Hoje o portal é só leitura, então não compensa.
 
 ---
 

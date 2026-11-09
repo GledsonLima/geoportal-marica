@@ -3,217 +3,385 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="SIGWEB SBN Maricá — risco climático e Soluções Baseadas na Natureza para o município de Maricá-RJ.">
   <!--
   ======================================================================
-  GEOPORTAL "Mapeamento de Risco Climático de Maricá-RJ" — frontend estático
-  VERSÃO: v2.1.0 (nuvem: Supabase + GitHub Pages, novembro/2026)
-  Dados: Supabase (PostgreSQL/PostGIS + API REST PostgREST), chave pública + RLS
+  SIGWEB SBN MARICÁ — frontend estático
+  VERSÃO: v3.1.0 — Etapas 1 e 2 (interface + as quatro camadas do índice)
+
+  Dados: PostgreSQL/PostGIS + API REST (PostgREST), chave pública + RLS somente leitura
   Hospedagem: GitHub Pages (arquivos estáticos, sem servidor próprio)
   Dependências (CDN, versões fixas): OpenLayers 9.2.4 | h3-js 4.1.0 | shpjs 4.0.4 |
                                      turf 6.5.0 | Chart.js 4.4.4
-  Configuração: js/config.js | Lógica: js/app.js | Estilo: css/estilo.css
+
+  ONDE MEXER (ver PERSONALIZAR.md):
+    css/estilo.css  -> cores, medidas e layout (bloco :root no topo)
+    index.html      -> textos, logos e ordem dos blocos
+    js/config.js    -> conexão com o banco e parâmetros do município
+    js/*.js         -> comportamento, separado por assunto
+
+  ARQUIVOS DE CÓDIGO (carregados na ordem, no fim deste arquivo):
+    util.js        funções de apoio (texto, números, download)
+    api.js         conversa com a API REST do banco
+    mapa.js        mapa, mapas base, grade hexagonal, distritos, legenda
+    ferramentas.js filtro, upload, exportação e outras camadas
+    painel.js      barra superior, busca, faixa de ícones, painéis, janela de detalhes
+    app.js         inicialização e ligação entre as partes
 
   CHANGELOG
-  v1.0.0 Versão local (Docker: PostGIS + GeoServer + Nginx). Ver registro de decisões.
-  v2.1.0 Carga em duas fases (função hex_mapa_web, script 04) com detalhe da célula sob demanda;
-         radar com rótulos quebrados em telas estreitas; menu sem animação ao carregar e que
-         fecha ao tocar no mapa; cores e medidas centralizadas em variáveis CSS (:root).
-  v2.0.0 Migração para Supabase + GitHub Pages:
-         - GeoServer removido: grade e distritos vêm da API REST do Supabase;
-           a simbologia (Jenks, 5 classes) é aplicada no navegador a partir de
-           RISK_BREAKS — mapa e legenda passam a ter UMA fonte (quebras e cores
-           conferidas com o SLD indicador_final_jenks5).
-         - Hexágonos reconstruídos do h3_index com h3-js (1 pedido de ~2 MB).
-         - Distritos desenhados só como contorno (não mascaram mais a grade).
-         - Clique, filtro, upload e exportação rodam localmente (sem WFS).
-         - Upload: média simples + média ponderada por área; suporte a linhas.
-         - Novo painel "Camadas do Supabase" (catálogo + conexão manual).
-         - Exportação: GeoJSON, KML e CSV (GeoPackage exigia o GeoServer).
-         - Barras do dashboard em escala 1–5 (antes começavam em 0).
+  v3.0.0 Identidade SIGWEB SBN Maricá: barra superior fixa com logo e busca com
+         autocompletar; faixa vertical de ícones com painéis recolhíveis; mapas base
+         trocados (a CARTO passou a exigir chave e devolvia tiles com marca d'água) e
+         fallback automático para o OpenStreetMap; código dividido por assunto.
+  v2.1.0 Carga em duas fases (hex_mapa_web) com detalhe da célula sob demanda.
+  v2.0.0 Migração para nuvem: API REST no lugar do GeoServer; simbologia no navegador.
+  v1.0.0 Versão local (Docker: PostGIS + GeoServer + Nginx).
   ======================================================================
   -->
-  <title>Mapeamento de Risco Climático de Maricá-RJ</title>
+  <title>SIGWEB SBN Maricá</title>
+  <link rel="icon" href="img/logo-marica.png">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@9.2.4/ol.css">
-  <link rel="stylesheet" href="css/estilo.css?v=2.1.0">
+  <link rel="stylesheet" href="css/estilo.css?v=3.1.0">
 </head>
 <body>
+
+<!-- ===================================================================
+     Ícones (Lucide, ISC). Ficam embutidos para não depender de outra
+     requisição e para todos terem a mesma espessura de traço.
+     =================================================================== -->
+<svg xmlns="http://www.w3.org/2000/svg" style="display:none" aria-hidden="true" focusable="false">
+  <symbol id="i-camadas" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"/>
+    <path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65"/><path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65"/>
+  </symbol>
+  <symbol id="i-mapa" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M14.106 5.553a2 2 0 0 0 1.788 0l3.659-1.83A1 1 0 0 1 21 4.619v12.764a1 1 0 0 1-.553.894l-4.553 2.277a2 2 0 0 1-1.788 0l-4.212-2.106a2 2 0 0 0-1.788 0l-3.659 1.83A1 1 0 0 1 3 19.381V6.618a1 1 0 0 1 .553-.894l4.553-2.277a2 2 0 0 1 1.788 0Z"/>
+    <path d="M15 5.764v15"/><path d="M9 3.236v15"/>
+  </symbol>
+  <symbol id="i-legenda" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M3 12h.01"/><path d="M3 18h.01"/><path d="M3 6h.01"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M8 6h13"/>
+  </symbol>
+  <symbol id="i-ferramentas" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M14 17H5"/><path d="M19 7h-9"/><circle cx="17" cy="17" r="3"/><circle cx="7" cy="7" r="3"/>
+  </symbol>
+  <symbol id="i-exportar" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/>
+  </symbol>
+  <symbol id="i-sobre" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/>
+  </symbol>
+  <symbol id="i-busca" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>
+  </symbol>
+  <symbol id="i-fechar" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M18 6 6 18"/><path d="m6 6 12 12"/>
+  </symbol>
+</svg>
+
+<!-- ===================================================================
+     1. BARRA SUPERIOR — logo, título e busca de endereços
+     Clicar no logo ou no título volta ao enquadramento inicial do município.
+     =================================================================== -->
+<header id="topbar">
+  <button id="brand" type="button" title="Voltar à visão inicial de Maricá">
+    <img id="brand-logo" src="img/logo-marica.png" alt="Prefeitura de Maricá" width="38" height="38">
+    <span id="brand-nome">SIGWEB <strong>SBN</strong> Maricá</span>
+  </button>
+
+  <div id="busca">
+    <!-- Abaixo de 768 px o campo some e sobra só esta lupa -->
+    <button id="busca-abrir" type="button" aria-label="Buscar endereço" aria-expanded="false">
+      <svg class="icone" aria-hidden="true"><use href="#i-busca"></use></svg>
+    </button>
+
+    <div id="busca-campo">
+      <svg class="icone busca-icone" aria-hidden="true"><use href="#i-busca"></use></svg>
+      <input id="busca-input" type="text" placeholder="Buscar endereço em Maricá" autocomplete="off"
+             role="combobox" aria-autocomplete="list" aria-expanded="false"
+             aria-controls="busca-sugestoes" aria-label="Buscar endereço em Maricá">
+      <button id="busca-limpar" type="button" aria-label="Limpar busca" hidden>
+        <svg class="icone" aria-hidden="true"><use href="#i-fechar"></use></svg>
+      </button>
+      <ul id="busca-sugestoes" role="listbox" aria-label="Sugestões de endereço" hidden></ul>
+    </div>
+    <div id="busca-status" role="status" class="sr-only"></div>
+  </div>
+</header>
+
 <div id="app">
-  <button id="sidebar-toggle" aria-label="Abrir/fechar painel" aria-expanded="true">☰</button>
 
-  <aside id="sidebar">
-    <!-- LOGOS (opcional): coloque as imagens na pasta img/ , apague as marcas de comentário
-         (a seta de abertura e a de fechamento) e ajuste os nomes dos arquivos.
-    <div class="logos">
-      <img src="img/logo-instituicao.png" alt="Nome da instituição">
-      <img src="img/logo-projeto.png" alt="Nome do projeto">
-    </div>
-    -->
-    <h1>Mapeamento de Risco Climático de Maricá-RJ</h1>
-    <div class="subtitle">Geoportal — grade hexagonal H3, resolução 10</div>
-    <div id="conn-status" class="conn-status">Conectando ao banco…</div>
+  <!-- =================================================================
+       2. FAIXA VERTICAL DE ÍCONES
+       Cada botão abre um painel; só um fica aberto por vez.
+       Os quatro primeiros são os do briefing; "Ferramentas" e "Exportar"
+       guardam o que já existia (filtro, upload e exportação).
+       =================================================================== -->
+  <nav id="rail" aria-label="Seções do portal">
+    <button class="rail-btn" type="button" data-painel="camadas"    aria-controls="painel" aria-expanded="false"><svg class="icone" aria-hidden="true"><use href="#i-camadas"></use></svg><span class="rail-dica">Camadas</span></button>
+    <button class="rail-btn" type="button" data-painel="mapa-base"  aria-controls="painel" aria-expanded="false"><svg class="icone" aria-hidden="true"><use href="#i-mapa"></use></svg><span class="rail-dica">Mapa base</span></button>
+    <button class="rail-btn" type="button" data-painel="legenda"    aria-controls="painel" aria-expanded="false"><svg class="icone" aria-hidden="true"><use href="#i-legenda"></use></svg><span class="rail-dica">Legenda</span></button>
+    <button class="rail-btn" type="button" data-painel="ferramentas" aria-controls="painel" aria-expanded="false"><svg class="icone" aria-hidden="true"><use href="#i-ferramentas"></use></svg><span class="rail-dica">Ferramentas</span></button>
+    <button class="rail-btn" type="button" data-painel="exportar"   aria-controls="painel" aria-expanded="false"><svg class="icone" aria-hidden="true"><use href="#i-exportar"></use></svg><span class="rail-dica">Exportar</span></button>
+    <button class="rail-btn rail-fim" type="button" data-painel="sobre" aria-controls="painel" aria-expanded="false"><svg class="icone" aria-hidden="true"><use href="#i-sobre"></use></svg><span class="rail-dica">Sobre</span></button>
+  </nav>
 
-    <h2>Mapa base</h2>
-    <div class="control-group">
-      <select id="basemap-select" aria-label="Mapa base">
-        <option value="osm" selected>OpenStreetMap</option>
-        <option value="positron">Claro (CARTO Positron)</option>
-        <option value="dark">Escuro (CARTO Dark Matter)</option>
-        <option value="satellite">Satélite (Esri)</option>
-        <option value="topo">Topográfico (OpenTopoMap)</option>
-      </select>
+  <!-- =================================================================
+       3. PAINEL — conteúdo de cada item da faixa de ícones
+       =================================================================== -->
+  <aside id="painel" hidden aria-labelledby="painel-titulo">
+    <div class="painel-topo">
+      <h2 id="painel-titulo">Camadas</h2>
+      <button id="painel-fechar" type="button" aria-label="Fechar painel">
+        <svg class="icone" aria-hidden="true"><use href="#i-fechar"></use></svg>
+      </button>
     </div>
 
-    <h2>Buscar endereço</h2>
-    <div class="control-group">
-      <input type="text" id="search-input" placeholder="Ex: Rua Beira Mar, Maricá" aria-label="Endereço">
-    </div>
-    <button class="btn btn-primary" id="search-btn">Buscar no mapa</button>
-    <button class="btn btn-secondary" id="clear-marker-btn">Limpar marcador</button>
-    <div id="search-status" class="status-text"></div>
+    <div class="painel-corpo">
 
-    <h2>Camadas</h2>
-    <div class="control-group checkbox-row">
-      <input type="checkbox" id="toggle-hex" checked>
-      <label for="toggle-hex">Grade hexagonal (indicador de risco)</label>
-    </div>
-    <div class="control-group checkbox-row">
-      <input type="checkbox" id="toggle-distritos" checked>
-      <label for="toggle-distritos">Limites distritais</label>
-    </div>
-    <div class="control-group checkbox-row nested">
-      <input type="checkbox" id="toggle-distritos-labels">
-      <label for="toggle-distritos-labels" class="small-label">Mostrar nomes dos distritos</label>
-    </div>
-    <div class="control-group">
-      <label for="opacity-slider">Opacidade da grade (<span id="opacity-value">100</span>%)</label>
-      <input type="range" id="opacity-slider" min="0" max="100" value="100">
-    </div>
-    <div class="hint-text">Clique em um hexágono para abrir o painel com os indicadores que compõem o risco daquela célula. Clique nas classes da legenda para ocultá-las ou exibi-las.</div>
+      <!-- ---------------- CAMADAS ---------------- -->
+      <section class="painel-secao" data-secao="camadas" hidden>
+        <div id="conn-status" class="conn-status" role="status">Conectando à base de dados…</div>
 
-    <h2>Filtrar por indicador</h2>
-    <div class="control-group two-cols">
-      <div>
-        <label for="filter-min">Mínimo</label>
-        <input type="number" id="filter-min" step="any" placeholder="ex: 2.47">
-      </div>
-      <div>
-        <label for="filter-max">Máximo</label>
-        <input type="number" id="filter-max" step="any" placeholder="ex: 3.59">
-      </div>
-    </div>
-    <button class="btn btn-primary" id="apply-filter">Aplicar filtro</button>
-    <button class="btn btn-secondary" id="clear-filter">Limpar filtro</button>
-    <div id="filter-status" class="status-text"></div>
-
-    <h2>Camadas do Supabase</h2>
-    <div id="catalog-list"><div class="hint-text">Carregando catálogo…</div></div>
-    <details class="manual-connect">
-      <summary>Conectar outra tabela/view</summary>
-      <div class="control-group">
-        <label for="manual-table">Nome da tabela ou view (geometria em EPSG:4326)</label>
-        <input type="text" id="manual-table" placeholder="ex: vw_minha_camada" autocomplete="off">
-      </div>
-      <div class="control-group two-cols">
-        <div>
-          <label for="manual-color">Cor</label>
-          <input type="color" id="manual-color" value="#ff7f00">
+        <h3>Índice de Risco Climático</h3>
+        <div class="control-group checkbox-row">
+          <input type="checkbox" id="toggle-hex" checked>
+          <label for="toggle-hex">Exibir a grade hexagonal</label>
         </div>
-        <div>
-          <label for="manual-title">Título</label>
-          <input type="text" id="manual-title" placeholder="opcional">
+
+        <!-- As quatro camadas usam a MESMA grade: são atributos diferentes da
+             mesma feição, não camadas empilháveis. Por isso são rádios. -->
+        <fieldset class="grupo-indice">
+          <legend class="sr-only">Camada exibida na grade</legend>
+          <div class="radio-row">
+            <input type="radio" name="indice" id="indice-final" value="final" checked>
+            <label for="indice-final">Índice de Risco Climático em Grade Hexagonal</label>
+          </div>
+          <div class="radio-row">
+            <input type="radio" name="indice" id="indice-ameaca" value="ameaca">
+            <label for="indice-ameaca">Ameaça Climática</label>
+          </div>
+          <div class="radio-row">
+            <input type="radio" name="indice" id="indice-exposicao" value="exposicao">
+            <label for="indice-exposicao">Exposição Socioambiental</label>
+          </div>
+          <div class="radio-row">
+            <input type="radio" name="indice" id="indice-vulnerabilidade" value="vulnerabilidade">
+            <label for="indice-vulnerabilidade">Vulnerabilidade Climática</label>
+          </div>
+        </fieldset>
+        <div class="hint-text" id="indice-aviso" hidden>
+          Os três mapas intermediários ainda não estão disponíveis nesta base.
+          Rode <code>supabase/05_camadas_do_indice.sql</code> no SQL Editor e recarregue a página.
         </div>
-      </div>
-      <button class="btn btn-secondary" id="manual-connect-btn">Conectar camada</button>
-      <div id="manual-status" class="status-text"></div>
-    </details>
 
-    <h2>Upload de camada</h2>
-    <div class="control-group">
-      <input type="file" id="upload-input" accept=".kml,.zip" aria-label="Arquivo KML ou Shapefile zip">
-    </div>
-    <div class="hint-text">
-      <strong>KML:</strong> envie o arquivo .kml diretamente.<br>
-      <strong>Shapefile:</strong> compacte .shp, .shx, .dbf e .prj em um único .zip (o .prj é obrigatório).<br>
-      Pontos, linhas e polígonos. O arquivo é processado só no seu navegador — nada é enviado ao servidor.
-    </div>
-    <button class="btn btn-secondary" id="clear-upload-btn">Remover camada carregada</button>
-    <div id="upload-status" class="status-text"></div>
-    <div id="upload-results"></div>
+        <div class="control-group">
+          <label for="opacity-slider">Opacidade da grade (<span id="opacity-value">100</span>%)</label>
+          <input type="range" id="opacity-slider" min="0" max="100" value="100">
+        </div>
+        <div class="control-group checkbox-row">
+          <input type="checkbox" id="toggle-radar" checked>
+          <label for="toggle-radar">Gráfico de radar ao clicar</label>
+        </div>
+        <div class="hint-text">
+          Clique em um hexágono para ver os indicadores daquela célula. Com a chave desligada,
+          o clique mostra apenas um resumo com os valores — sem consulta nova ao banco.
+        </div>
 
-    <h2>Exportar dados</h2>
-    <div class="export-group">
-      <div class="export-group-title">Grade hexagonal (respeita o filtro ativo)</div>
-      <div class="export-buttons">
-        <button class="btn btn-secondary" data-export="hex" data-format="geojson">GeoJSON</button>
-        <button class="btn btn-secondary" data-export="hex" data-format="kml">KML</button>
-        <button class="btn btn-secondary" data-export="hex" data-format="csv">CSV</button>
-      </div>
-    </div>
-    <div class="export-group">
-      <div class="export-group-title">Limites distritais</div>
-      <div class="export-buttons">
-        <button class="btn btn-secondary" data-export="distritos" data-format="geojson">GeoJSON</button>
-        <button class="btn btn-secondary" data-export="distritos" data-format="kml">KML</button>
-      </div>
-    </div>
-    <div class="hint-text">Arquivos gerados em EPSG:4326 (WGS 84). Para GeoPackage ou análises no SRC do projeto (EPSG:31983), conecte o QGIS direto ao banco Supabase (ver README).</div>
+        <h3>Limites</h3>
+        <div class="control-group checkbox-row">
+          <input type="checkbox" id="toggle-distritos" checked>
+          <label for="toggle-distritos">Limites distritais</label>
+        </div>
+        <div class="control-group checkbox-row nested">
+          <input type="checkbox" id="toggle-distritos-labels">
+          <label for="toggle-distritos-labels" class="small-label">Mostrar nomes dos distritos</label>
+        </div>
 
-    <div id="source-note">
-      Tesselação hexagonal H3 originada do projeto <strong>Estudo Estratégico de adaptação climática com soluções baseadas na natureza para o município de Maricá-RJ</strong>.
-      Dados classificados em 5 classes por quebras naturais (Jenks).
+        <h3>Outras camadas</h3>
+        <div id="catalog-list"><div class="hint-text">Carregando catálogo…</div></div>
+        <details class="manual-connect">
+          <summary>Conectar outra tabela/view</summary>
+          <div class="control-group">
+            <label for="manual-table">Nome da tabela ou view (geometria em EPSG:4326)</label>
+            <input type="text" id="manual-table" placeholder="ex: vw_minha_camada" autocomplete="off">
+          </div>
+          <div class="control-group two-cols">
+            <div><label for="manual-color">Cor</label><input type="color" id="manual-color" value="#ff7f00"></div>
+            <div><label for="manual-title">Título</label><input type="text" id="manual-title" placeholder="opcional"></div>
+          </div>
+          <button class="btn btn-secondary" type="button" id="manual-connect-btn">Conectar camada</button>
+          <div id="manual-status" class="status-text"></div>
+        </details>
+      </section>
+
+      <!-- ---------------- MAPA BASE ---------------- -->
+      <section class="painel-secao" data-secao="mapa-base" hidden>
+        <div id="basemap-list" class="basemap-list" role="radiogroup" aria-label="Mapa base"></div>
+        <div class="hint-text">
+          A miniatura é um tile real do provedor, na altura de Maricá — se ela aparecer, o mapa base está respondendo.
+          Se um provedor falhar durante o uso, o portal volta sozinho para o OpenStreetMap e avisa.
+        </div>
+      </section>
+
+      <!-- ---------------- LEGENDA ---------------- -->
+      <section class="painel-secao" data-secao="legenda" hidden>
+        <div id="legenda-painel"></div>
+        <div class="hint-text">Clique numa classe para ocultá-la ou exibi-la no mapa.</div>
+        <div class="control-group checkbox-row">
+          <input type="checkbox" id="toggle-paleta">
+          <label for="toggle-paleta">Paleta segura para daltonismo</label>
+        </div>
+        <div class="hint-text">
+          Troca as cores do estudo por uma escala sequencial única (ColorBrewer YlOrRd), legível
+          por quem tem daltonismo. As <strong>faixas não mudam</strong> — só as cores.
+        </div>
+      </section>
+
+      <!-- ---------------- FERRAMENTAS ---------------- -->
+      <section class="painel-secao" data-secao="ferramentas" hidden>
+        <h3>Filtrar por indicador</h3>
+        <div class="hint-text">O filtro vale para a camada exibida: <strong id="filter-camada">Índice de Risco Climático</strong>.</div>
+        <div class="control-group two-cols">
+          <div><label for="filter-min">Mínimo</label><input type="number" id="filter-min" step="any" placeholder="ex: 2.47"></div>
+          <div><label for="filter-max">Máximo</label><input type="number" id="filter-max" step="any" placeholder="ex: 3.59"></div>
+        </div>
+        <button class="btn btn-primary" type="button" id="apply-filter">Aplicar filtro</button>
+        <button class="btn btn-secondary" type="button" id="clear-filter">Limpar filtro</button>
+        <div id="filter-status" class="status-text"></div>
+
+        <h3>Upload de camada</h3>
+        <div class="control-group">
+          <input type="file" id="upload-input" accept=".kml,.zip" aria-label="Arquivo KML ou Shapefile zip">
+        </div>
+        <div class="hint-text">
+          <strong>KML:</strong> envie o arquivo .kml diretamente.<br>
+          <strong>Shapefile:</strong> compacte .shp, .shx, .dbf e .prj num único .zip (o .prj é obrigatório;
+          inclua o .cpg para os acentos saírem certos).<br>
+          Pontos, linhas e polígonos. O arquivo é processado só no seu navegador — nada é enviado ao servidor.
+        </div>
+        <button class="btn btn-secondary" type="button" id="clear-upload-btn">Remover camada carregada</button>
+        <div id="upload-status" class="status-text"></div>
+        <div id="upload-results"></div>
+      </section>
+
+      <!-- ---------------- EXPORTAR ---------------- -->
+      <section class="painel-secao" data-secao="exportar" hidden>
+        <div class="export-group">
+          <div class="export-group-title">Grade hexagonal (respeita o filtro ativo)</div>
+          <div class="export-buttons">
+            <button class="btn btn-secondary" type="button" data-export="hex" data-format="geojson">GeoJSON</button>
+            <button class="btn btn-secondary" type="button" data-export="hex" data-format="kml">KML</button>
+            <button class="btn btn-secondary" type="button" data-export="hex" data-format="csv">CSV</button>
+          </div>
+        </div>
+        <div class="export-group">
+          <div class="export-group-title">Limites distritais</div>
+          <div class="export-buttons">
+            <button class="btn btn-secondary" type="button" data-export="distritos" data-format="geojson">GeoJSON</button>
+            <button class="btn btn-secondary" type="button" data-export="distritos" data-format="kml">KML</button>
+          </div>
+        </div>
+        <div class="hint-text">
+          Arquivos gerados em EPSG:4326 (WGS 84). Para GeoPackage ou análises no SRC do projeto
+          (EPSG:31983 — SIRGAS 2000 / UTM 23S), conecte o QGIS direto ao banco (ver README).
+        </div>
+      </section>
+
+      <!-- ---------------- SOBRE ---------------- -->
+      <section class="painel-secao" data-secao="sobre" hidden>
+        <h3>O projeto</h3>
+        <p class="texto">
+          O SIGWEB SBN Maricá reúne, num só mapa, o <strong>Índice de Risco Climático</strong> do município
+          e o catálogo de <strong>Soluções Baseadas na Natureza (SbN)</strong> indicadas para enfrentá-lo.
+        </p>
+        <h3>Dados</h3>
+        <p class="texto">
+          Tesselação hexagonal H3 (resolução 10) originada do <em>Estudo Estratégico de adaptação climática
+          com soluções baseadas na natureza para o município de Maricá-RJ</em>. Os indicadores são
+          classificados em 5 classes por quebras naturais (Jenks), conforme a cartografia do estudo.
+        </p>
+        <p class="texto">
+          Limites distritais e demais camadas vêm do banco geográfico do projeto
+          (PostgreSQL/PostGIS, EPSG:31983 — SIRGAS 2000 / UTM 23S), publicados para a web em EPSG:4326.
+        </p>
+        <h3>Como ler o mapa</h3>
+        <p class="texto">
+          Cada hexágono cobre cerca de 0,015 km². O índice varia de 1 (menor risco) a 5 (maior risco) e
+          resulta da combinação de Ameaça Climática, Exposição Socioambiental e Vulnerabilidade Climática.
+          Os valores são médias dentro de cada célula: leia-os como tendência da área, não como medida de um lote.
+        </p>
+        <h3>Créditos</h3>
+        <p class="texto" id="creditos-texto">
+          Prefeitura de Maricá. Dados e metodologia: equipe do Estudo Estratégico de adaptação climática.
+        </p>
+        <p class="texto nota">Versão 3.0.0 do portal.</p>
+      </section>
+
     </div>
   </aside>
 
+  <!-- =================================================================
+       4. MAPA
+       =================================================================== -->
   <main id="map-wrapper">
     <div id="map" tabindex="0" aria-label="Mapa"></div>
 
     <div id="loading-overlay" role="status">
       <div class="spinner"></div>
-      <div id="loading-text">Carregando dados do Supabase…</div>
+      <div id="loading-text">Carregando dados…</div>
+    </div>
+
+    <!-- Aviso de troca automática de mapa base -->
+    <div id="aviso-mapa" class="aviso" role="status" hidden>
+      <span id="aviso-mapa-texto"></span>
+      <button type="button" id="aviso-mapa-fechar" aria-label="Fechar aviso">
+        <svg class="icone" aria-hidden="true"><use href="#i-fechar"></use></svg>
+      </button>
     </div>
 
     <div id="legend-stack">
       <div class="legend" id="distritos-legend">
-        <div class="legend-row">
-          <span class="swatch-line"></span>
-          <span class="legend-label">Limite distrital</span>
-        </div>
+        <div class="legend-row"><span class="swatch-line"></span><span class="legend-label">Limite distrital</span></div>
       </div>
       <div class="legend" id="risk-legend">
-        <div class="legend-title">Índice de Risco Climático</div>
+        <div class="legend-title" id="risk-legend-titulo">Índice de Risco Climático</div>
         <div id="risk-legend-rows"></div>
       </div>
     </div>
 
     <div id="info-panel" class="info-panel" hidden>
-      <button class="info-close" id="info-close" aria-label="Fechar">&times;</button>
+      <button class="info-close" type="button" id="info-close" aria-label="Fechar">
+        <svg class="icone" aria-hidden="true"><use href="#i-fechar"></use></svg>
+      </button>
       <div id="info-content"></div>
     </div>
 
     <div id="search-marker">📍</div>
   </main>
+</div>
 
-  <!-- Dashboard modal: aberto ao clicar em um hexágono -->
-  <div id="dashboard-overlay">
-    <div id="dashboard-card" role="dialog" aria-modal="true" aria-labelledby="dash-title">
-      <button id="dashboard-close" aria-label="Fechar">&times;</button>
-      <div class="dash-h3id">Célula H3: <span id="dash-h3id">-</span></div>
+<!-- Janela de detalhes da célula (abre ao clicar num hexágono) -->
+<div id="dashboard-overlay">
+  <div id="dashboard-card" role="dialog" aria-modal="true" aria-labelledby="dash-title">
+    <button id="dashboard-close" type="button" aria-label="Fechar">
+      <svg class="icone" aria-hidden="true"><use href="#i-fechar"></use></svg>
+    </button>
+    <div class="dash-h3id">Célula H3: <span id="dash-h3id">-</span></div>
 
-      <div class="dash-final-wrap">
-        <div class="dash-final-caption" id="dash-title">Índice de Risco Climático Final</div>
-        <div class="dash-final-value" id="dash-final-value">-</div>
-        <div class="dash-final-badge" id="dash-final-badge">-</div>
-      </div>
+    <div class="dash-final-wrap">
+      <div class="dash-final-caption" id="dash-title">Índice de Risco Climático Final</div>
+      <div class="dash-final-value" id="dash-final-value">-</div>
+      <div class="dash-final-badge" id="dash-final-badge">-</div>
+    </div>
 
-      <div class="dash-section-title">Mapas intermediários (escala 1–5)</div>
-      <div id="dash-bars"></div>
+    <div class="dash-section-title" id="dash-bars-titulo">Mapas que compõem o índice (escala 1–5)</div>
+    <div id="dash-bars"></div>
 
-      <div class="dash-radar-section">
-        <div class="dash-section-title">Grupos que compõem os mapas</div>
-        <div class="dash-radar-wrap">
-          <canvas id="dash-radar-canvas"></canvas>
-        </div>
-      </div>
+    <div class="dash-radar-section">
+      <div class="dash-section-title" id="dash-grupos-titulo">Grupos que compõem os mapas</div>
+      <!-- Com menos de 3 grupos o radar não existe: entram barras aqui. -->
+      <div id="dash-grupos"></div>
+      <div class="dash-radar-wrap" id="dash-radar-wrap"><canvas id="dash-radar-canvas"></canvas></div>
     </div>
   </div>
 </div>
@@ -223,7 +391,14 @@
 <script src="https://cdn.jsdelivr.net/npm/shpjs@4.0.4/dist/shp.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6.5.0/turf.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
-<script src="js/config.js?v=2.1.0"></script>
-<script src="js/app.js?v=2.1.0"></script>
+<!-- Ordem obrigatória: cada arquivo usa o anterior. Ao alterar qualquer um deles,
+     aumente o ?v= de TODOS para os visitantes não ficarem com a versão em cache. -->
+<script src="js/config.js?v=3.1.0"></script>
+<script src="js/util.js?v=3.1.0"></script>
+<script src="js/api.js?v=3.1.0"></script>
+<script src="js/mapa.js?v=3.1.0"></script>
+<script src="js/ferramentas.js?v=3.1.0"></script>
+<script src="js/painel.js?v=3.1.0"></script>
+<script src="js/app.js?v=3.1.0"></script>
 </body>
 </html>
