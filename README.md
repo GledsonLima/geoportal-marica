@@ -3,7 +3,7 @@
 > Antes chamado "Geoportal — Mapeamento de Risco Climático de Maricá-RJ".
 > A v3.0.0 traz a identidade SIGWEB SBN Maricá: barra superior com logo e busca,
 > faixa vertical de ícones com painéis, novos mapas base e o código dividido por assunto.
-> A v3.2.0 inclui as quatro camadas do índice, as áreas prioritárias e as fichas de SbN (Passos 7 e 8).
+> A v3.3.0 inclui as quatro camadas do índice, as áreas prioritárias, as fichas de SbN, medir e o relatório do local (Passos 7 a 9).
 
 
 Versão em nuvem do geoportal: **banco e API no Supabase** + **site estático no GitHub Pages**.
@@ -281,6 +281,45 @@ um arquivo enviado ao repositório. Nada precisa ser republicado no site.
 **Observação de uso:** com a camada de áreas ligada, o clique dentro de uma área abre o painel
 inferior. Para ver o radar de um hexágono, clique fora das áreas ou desligue a camada.
 
+## Passo 9 — Menu reorganizado, medir e relatório do local (v3.3.0)
+
+**Nada a rodar no banco.** Só os arquivos do site mudaram (há um arquivo novo: `js/desenho.js`).
+
+**Menu Camadas**, na ordem do raciocínio do estudo:
+1. **Risco Climático** — grade hexagonal; camadas *Índice de Risco Climático*, *Ameaças Climáticas*,
+   *Exposição* e *Vulnerabilidade*; e a caixa **Ferramentas da camada**, que só vale para essa grade:
+   - *Opacidade do preenchimento* (nova): deixa o interior dos hexágonos transparente e desenha o
+     contorno de cada um **na cor da classe** — o fundo aparece e o risco continua legível;
+   - *Opacidade da grade*: transparência da camada inteira (preenchimento e contorno);
+   - *Gráfico de radar*: liga/desliga o gráfico ao selecionar um hexágono;
+   - *Filtrar por indicador*: veio do menu Ferramentas para perto da camada a que se aplica.
+2. **Priorização Territorial** — *Áreas Prioritárias para Adaptação Climática (60 áreas)*: a camada
+   "limpa" (só contorno, sem tema). Começa desligada.
+3. **Áreas Prioritárias por Temática** — as mesmas 60 áreas, por tema.
+4. **Limites** — distritos. Os nomes agora ficam no **centro visual** de cada distrito (polo de
+   inacessibilidade), não mais encostados na borda.
+
+Todas as explicações ficam recolhidas nos botões **ⓘ**. O status "Conectado · … hexágonos" foi para
+o menu **Sobre**.
+
+**Menu Ferramentas**
+- **Medir** distância e área, em metros/quilômetros e m²/ha/km², com perímetro. O cálculo é
+  geodésico (sobre a esfera terrestre): medir no plano do Web Mercator daria áreas cerca de 17%
+  maiores em Maricá. Duplo clique termina; no celular, botão **Concluir**; `Esc` cancela.
+- **Relatório de um local**: desenhe um ponto ou uma área de **até 10 km² (1.000 ha)**. O relatório abre
+  no painel inferior com o índice e as três dimensões (médias ponderadas pela área de cada hexágono
+  dentro do desenho), a distribuição da área por classe, o radar dos 9 grupos, as áreas
+  prioritárias e temas tocados (com a sobreposição em ha) e os distritos. Pode ser baixado como HTML
+  (abre em qualquer navegador e imprime em PDF), CSV e GeoJSON.
+  *Por que o limite?* A média de centenas de hexágonos suaviza os extremos e esconde focos de risco
+  (efeito de escala/MAUP): acima de 10 km² o número deixaria de descrever um "local".
+  *Uma consulta por vez*: enquanto calcula, os botões ficam travados; um desenho novo apaga o anterior.
+  Áreas com o contorno cruzado são recusadas com uma explicação.
+
+**Fichas** — assumem os tons do tema (roxo em Saneamento Ecológico, verde em Infraestrutura Verde
+etc.; a cor do banco é escurecida só o necessário para manter o contraste AA). Os avisos de "em
+elaboração" saíram: campo vazio simplesmente não aparece, e sem ilustração a coluna dela some.
+
 ## Atualizar o site depois de receber uma versão nova
 
 1. No repositório do GitHub, use *Add file → Upload files* e arraste as pastas `css`, `js` e `img`
@@ -312,16 +351,13 @@ Envie junto o arquivo `.cpg` (já é gerado pelo QGIS). Sem ele, nomes com acent
 em codificação antiga (Windows-1252/ISO-8859-1) podem aparecer com caracteres trocados (ex.: "�rea").
 O `.prj` continua obrigatório: é ele que permite reprojetar de UTM/SIRGAS para o mapa.
 
-## Publicar uma camada nova no painel "Camadas do Supabase"
+## Publicar uma camada nova
 
-A chave pública **não consegue listar** as tabelas do banco (bloqueio de segurança do Supabase),
-por isso o site lê a tabela `catalogo_camadas`. Para publicar, por exemplo, áreas de risco:
-
-1. Importe com ogr2ogr (como no Passo 2) para `public.minha_camada` em EPSG:31983.
-2. Rode o modelo `supabase/03_modelo_nova_camada.sql` trocando os nomes: ele cria a view em
-   EPSG:4326, o RLS de leitura e o registro no catálogo.
-3. Recarregue o site: a camada aparece na lista. Para testar sem cadastrar, use
-   **"Conectar outra tabela/view"** (vale só para aquela visita).
+> **Desde a v3.3.0 o grupo "Outras camadas" e a opção "Conectar outra tabela/view" saíram da
+> interface** (o site não lê mais `catalogo_camadas`). Uma camada nova passa a ser adicionada no
+> código, como as áreas prioritárias: view em EPSG:4326 com RLS de leitura (o modelo
+> `supabase/03_modelo_nova_camada.sql` continua valendo para essa parte) + uma camada em
+> `js/mapa.js` + a chave no grupo certo de `index.html`. Peça a inclusão quando precisar.
 
 ---
 

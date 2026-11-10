@@ -28,7 +28,7 @@ window.GEOPORTAL_CONFIG = {
   RPC_HEX: 'hex_dados_web',                 // função completa (script 02): todos os indicadores
   TABELA_HEX: 'hex_indicadores_completos',  // tabela consultada no clique (detalhe de uma célula)
   VIEW_DISTRITOS: 'vw_limites_distritais',
-  TABELA_CATALOGO: 'catalogo_camadas',
+  TABELA_CATALOGO: 'catalogo_camadas',      // não usada desde a v3.3.0 ("Outras camadas" saiu do menu)
 
   // ---- Áreas prioritárias e SbN (script 06) -----------------------------
   VIEW_AREAS: 'vw_areas_prioritarias',      // 60 áreas em EPSG:4326, com o vetor `temas`

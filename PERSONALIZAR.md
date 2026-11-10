@@ -11,6 +11,7 @@ arquivo → *Commit changes* → o site se atualiza em ~1 minuto).
 | `js/mapa.js` | Mapas base, cores do risco, estilo dos distritos |
 | `js/painel.js` | Comportamento da barra superior, busca, painéis e janela de detalhes |
 | `js/fichas.js` | Painel inferior: Área → Tema → lista de SbN → ficha (altura, arraste, modelo da ficha) |
+| `js/desenho.js` | Medir distância/área e relatório de um ponto ou área desenhada |
 | `js/ferramentas.js` | Filtro, upload, exportação e catálogo de camadas |
 | `js/util.js`, `js/api.js`, `js/app.js` | Apoio, conversa com o banco e inicialização |
 
@@ -132,3 +133,18 @@ não puder ser lida.
 **Aparência da ficha** — em `css/estilo.css`: variáveis `--cor-ficha*` e `--cor-restricao-*` (bloco
 `:root`) e as classes `.ficha-*`. O conteúdo vem de `rpc/ficha_sbn`; a estrutura está na função
 `fichaHTML`, em `js/fichas.js`.
+
+## Menu, medir e relatório (v3.3.0)
+
+**Textos dos botões ⓘ** — ficam em `index.html`, cada um num `<div class="info-texto" id="info-…">`
+logo abaixo do controle a que se refere. Para criar um novo, copie o par botão + texto e troque o
+`id` (o botão aponta para ele em `aria-controls`).
+
+**Nomes das camadas** — rótulos dos rádios em `index.html`; nome na legenda e no filtro em
+`js/mapa.js` (campo `curto` de cada item de `CAMADAS`).
+
+**Limite de área do relatório** — `LIMITE_HA` no início de `js/desenho.js` (padrão 1000 ha = 10 km²).
+Ao mudar, atualize também o texto do ⓘ "Relatório de um local" em `index.html`.
+
+**Cor das fichas** — vem de `tema_estrategico.cor`. A função `paletaDoTema`, em `js/fichas.js`,
+escurece a cor até o texto branco sobre ela passar de 4,5:1.

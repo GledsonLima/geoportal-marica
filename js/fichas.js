@@ -223,6 +223,7 @@
   /** Passo 1 — temas da área */
   function desenharTemas() {
     atualizarTrilha();
+    tingirCorpo(null);
     var ha = typeof ficha.areaHa === 'number' ? ficha.areaHa.toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + ' ha' : '';
     var cartoes = ficha.temas.map(function (t) {
       return '<button type="button" class="sbn-cartao' + (ficha.tema && ficha.tema.id === t.id ? ' marcado' : '') +
@@ -245,15 +246,14 @@
   function desenharLista() {
     atualizarTrilha();
     var t = ficha.tema;
+    tingirCorpo(t.cor);
     var cartoes = ficha.lista.map(function (s) {
-      var completa = String(s.status_conteudo || '').toLowerCase() === 'concluído';
       var desc = String(s.descricao || '');
       if (desc.length > 150) desc = desc.slice(0, 147).replace(/\s+\S*$/, '') + '…';
       return '<button type="button" class="sbn-cartao" style="border-left-color:' + esc(t.cor) + '" data-slug="' + esc(s.slug) + '">' +
         '<span class="t">' + esc(s.nome) + '</span>' +
         (s.grupo_funcional ? '<span class="s"><strong>' + esc(s.grupo_funcional) + '</strong></span>' : '') +
         (desc ? '<span class="s">' + esc(desc) + '</span>' : '') +
-        '<span class="selo' + (completa ? ' ok' : '') + '">' + (completa ? 'Ficha completa' : 'Ficha em elaboração') + '</span>' +
         '<span class="mais">Abrir a ficha ›</span></button>';
     }).join('');
     corpo.innerHTML =
@@ -261,6 +261,50 @@
       '<p>Área ' + esc(ficha.area) + ' · ' + plural(ficha.lista.length, 'solução baseada na natureza', 'soluções baseadas na natureza') + '</p></div>' +
       '<div class="sbn-grade">' + (cartoes || '<div class="sbn-vazio">Nenhuma solução cadastrada para este tema.</div>') + '</div>';
     paraOTopo();
+  }
+
+  // ---- Paleta do tema (v3.3.0) ----------------------------------------
+  /*  Cada ficha (e a lista de soluções) assume os tons do seu tema: roxo para
+      Saneamento Ecológico, verde para Infraestrutura Verde etc. A cor do banco
+      (tema_estrategico.cor) é escurecida só o necessário para que o texto
+      branco sobre ela e ela sobre o branco passem de 4,5:1 (WCAG AA).          */
+  function rgbDe(hex) {
+    hex = String(hex || '').replace('#', '');
+    if (!/^[0-9a-f]{6}$/i.test(hex)) return [43, 92, 138];      // azul padrão
+    return [0, 2, 4].map(function (i) { return parseInt(hex.substr(i, 2), 16); });
+  }
+  function hexDe(rgb) {
+    return '#' + rgb.map(function (v) { return ('0' + Math.round(Math.max(0, Math.min(255, v))).toString(16)).slice(-2); }).join('');
+  }
+  function luminancia(rgb) {
+    var c = rgb.map(function (v) { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); });
+    return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+  }
+  function contrasteComBranco(rgb) { return 1.05 / (luminancia(rgb) + 0.05); }
+  function misturar(rgb, alvo, t) { return rgb.map(function (v, i) { return v + (alvo[i] - v) * t; }); }
+
+  var cachePaleta = new Map();
+  function paletaDoTema(cor) {
+    if (cachePaleta.has(cor)) return cachePaleta.get(cor);
+    var base = rgbDe(cor), forte = base, t = 0;
+    while (contrasteComBranco(forte) < 4.6 && t < 0.9) { t += 0.04; forte = misturar(base, [0, 0, 0], t); }
+    var p = {
+      forte: hexDe(forte),                                   // títulos, chips, benefícios
+      ativa: hexDe(misturar(forte, [0, 0, 0], 0.25)),       // função indicada
+      clara: hexDe(misturar(base, [255, 255, 255], 0.88)),  // fundos
+      borda: hexDe(misturar(base, [255, 255, 255], 0.45))   // moldura da ilustração
+    };
+    cachePaleta.set(cor, p);
+    return p;
+  }
+  function varsDoTema(cor) {
+    var p = paletaDoTema(cor);
+    return '--cor-ficha:' + p.forte + ';--cor-ficha-ativa:' + p.ativa + ';--cor-ficha-clara:' + p.clara + ';--cor-ficha-borda:' + p.borda;
+  }
+  /** Aplica os tons do tema ao corpo do painel (lista e ficha); sem tema, volta ao padrão. */
+  function tingirCorpo(cor) {
+    if (!cor) { corpo.removeAttribute('style'); return; }
+    corpo.setAttribute('style', varsDoTema(cor));
   }
 
   // ---- Ficha ---------------------------------------------------------
@@ -275,9 +319,13 @@
       '<span class="rot">' + esc(rotulo) + '</span><span class="q" aria-hidden="true">' + q + '</span></div>';
   }
 
-  function par(v) {
-    v = v == null ? '' : String(v).trim();
-    return v ? '<p>' + esc(v) + '</p>' : '<p><span class="pendente">Em elaboração</span></p>';
+  function texto(v) { return v == null ? '' : String(v).trim(); }
+
+  /** Campo vazio não aparece (nem o título dele): o visitante só vê conteúdo. */
+  function secao(titulo, v) {
+    v = texto(v);
+    if (!v) return '';
+    return (titulo ? '<h4>' + esc(titulo) + '</h4>' : '') + '<p>' + esc(v) + '</p>';
   }
 
   /** "Poluição hídrica; aporte de sedimentos." -> ["Poluição hídrica", "Aporte de sedimentos"] */
@@ -294,72 +342,64 @@
   }
 
   function fichaHTML(d, todasFuncoes) {
-    var completa = String(d.status_conteudo || '').toLowerCase() === 'concluído';
     var ativas = new Set((d.funcoes || []).map(Number));
     var desafios = itens(d.desafio_ambiental), ameacas = itens(d.ameaca_climatica);
-    var custo = String(d.custo || '').trim();
-    var unidade = String(d.custo_unidade || '').trim();
+    var custo = texto(d.custo), unidade = texto(d.custo_unidade);
     var img = urlSegura(d.ilustracao_url);
+    var restricoes = texto(d.restricoes);
 
     var grade = todasFuncoes.map(function (f) {
       var on = ativas.has(Number(f.id));
-      return '<div class="funcao' + (on ? ' on' : '') + '"><svg class="icone" aria-hidden="true"><use href="#i-folha"></use></svg>' +
+      return '<div class="funcao' + (on ? ' on' : '') + '" role="listitem"><svg class="icone" aria-hidden="true"><use href="#i-folha"></use></svg>' +
         '<span>' + esc(f.nome) + (on ? '<span class="sr-only"> (indicada)</span>' : '') + '</span></div>';
     }).join('');
 
-    var ben = [['Ambientais', d.beneficios_ambientais], ['Sociais', d.beneficios_sociais], ['Econômicos', d.beneficios_economicos]];
-    var temBen = ben.some(function (b) { return b[1] && String(b[1]).trim(); });
+    var ben = [['Ambientais', d.beneficios_ambientais], ['Sociais', d.beneficios_sociais], ['Econômicos', d.beneficios_economicos]]
+      .filter(function (b) { return texto(b[1]); });
+    var chips = function (lista, linha) {
+      return '<div class="chips' + (linha ? ' linha' : '') + '">' +
+        lista.map(function (x) { return '<span class="chip">' + esc(x) + '</span>'; }).join('') + '</div>';
+    };
 
-    return '<article class="ficha" aria-label="Ficha: ' + esc(d.nome) + '">' +
-      (completa ? '' :
-        '<div class="ficha-aviso" role="note"><strong>Ficha em elaboração.</strong>' +
-        '<span>Parte do conteúdo ainda será revisada e complementada pela equipe técnica; os campos marcados como "Em elaboração" ainda não têm texto definitivo.</span></div>') +
+    // Coluna da esquerda: só o que tem conteúdo
+    var esquerda =
+      (custo ? '<div class="ficha-custo"><span class="moeda" aria-hidden="true">$</span><span>' +
+        esc(custo) + (unidade ? ' / ' + esc(unidade) : '') + '</span></div>' : '') +
+      secao('', d.descricao) +
+      secao('Aplicação:', d.aplicacao) +
+      (desafios.length ? '<h4>Desafios:</h4>' + chips(desafios) : '') +
+      (ameacas.length ? '<h4>Ameaças climáticas relacionadas:</h4>' + chips(ameacas, true) : '');
 
+    var rodape = [['Escala de aplicação', d.escala_aplicacao], ['Tempo até o resultado', d.tempo_resultado], ['Referências', d.referencias]]
+      .filter(function (r) { return texto(r[1]); })
+      .map(function (r) { return '<div><b>' + esc(r[0]) + ':</b> ' + esc(texto(r[1])) + '</div>'; }).join('');
+
+    return '<article class="ficha" style="' + varsDoTema(d.tema_cor) + '" aria-label="Ficha: ' + esc(d.nome) + '">' +
       '<div class="ficha-topo">' +
         '<div class="ficha-num" aria-hidden="true">' + esc(d.ordem) + '</div>' +
         '<div class="ficha-titulo"><h3>' + esc(d.nome) + '</h3>' +
-          '<span class="chip-tema" style="background:' + esc(d.tema_cor) + ';color:' + M.corDoTexto(d.tema_cor) + '">' + esc(d.tema_nome) + '</span></div>' +
+          '<span class="chip-tema">' + esc(d.tema_nome) + '</span></div>' +
         '<div class="ficha-niveis">' + nivelHTML('Complexidade', d.complexidade) + nivelHTML('Manutenção', d.manutencao) + '</div>' +
       '</div>' +
 
-      '<div class="ficha-corpo">' +
-        '<div class="ficha-col">' +
-          (custo ? '<div class="ficha-custo"><span class="moeda" aria-hidden="true">$</span><span>' +
-            esc(custo) + (unidade ? ' / ' + esc(unidade) : '') + '</span></div>' : '') +
-          par(d.descricao) +
-          '<h4>Aplicação:</h4>' + par(d.aplicacao) +
-          '<h4>Desafios:</h4>' +
-          (desafios.length ? '<div class="chips">' + desafios.map(function (x) { return '<span class="chip">' + esc(x) + '</span>'; }).join('') + '</div>'
-                           : '<p><span class="pendente">Em elaboração</span></p>') +
-          (ameacas.length ? '<h4>Ameaças climáticas relacionadas:</h4><div class="chips linha">' +
-            ameacas.map(function (x) { return '<span class="chip">' + esc(x) + '</span>'; }).join('') + '</div>' : '') +
-        '</div>' +
-
-        '<div class="ficha-col">' +
-          '<div class="ficha-ilustra">' + (img
-            ? '<img src="' + esc(img) + '" alt="Ilustração: ' + esc(d.nome) + '" loading="lazy">'
-            : '<div><svg class="icone" aria-hidden="true"><use href="#i-folha"></use></svg>Ilustração em elaboração</div>') + '</div>' +
-        '</div>' +
-
+      // Sem ilustração, a coluna dela some e o texto ganha o espaço
+      '<div class="ficha-corpo' + (img ? '' : ' sem-ilustracao') + '">' +
+        (esquerda ? '<div class="ficha-col">' + esquerda + '</div>' : '') +
+        (img ? '<div class="ficha-col"><div class="ficha-ilustra"><img src="' + esc(img) + '" alt="Ilustração: ' +
+          esc(d.nome) + '" loading="lazy"></div></div>' : '') +
         '<div class="ficha-col direita">' +
           '<div class="ficha-grupo"><svg class="icone" aria-hidden="true"><use href="#i-folha"></use></svg><h4>' +
             esc(d.grupo_funcional || 'Funções') + '</h4></div>' +
-          '<div class="ficha-direita">' +
+          '<div class="ficha-direita' + (restricoes ? '' : ' sem-restricoes') + '">' +
             '<div class="funcoes" role="list" aria-label="Funções da solução">' + grade + '</div>' +
-            '<div class="restricoes"><h4>Restrições e situações não indicadas</h4>' +
-              (String(d.restricoes || '').trim() ? esc(d.restricoes) : '<span class="pendente">Em elaboração</span>') + '</div>' +
+            (restricoes ? '<div class="restricoes"><h4>Restrições e situações não indicadas</h4>' + esc(restricoes) + '</div>' : '') +
           '</div>' +
-          (temBen ? '<section class="beneficios" aria-label="Benefícios"><h4>Benefícios</h4><div class="beneficios-cols">' +
-            ben.map(function (b) { return '<div><h5>' + esc(b[0]) + '</h5><p>' + esc(String(b[1] || '—')) + '</p></div>'; }).join('') +
+          (ben.length ? '<section class="beneficios" aria-label="Benefícios"><h4>Benefícios</h4><div class="beneficios-cols">' +
+            ben.map(function (b) { return '<div><h5>' + esc(b[0]) + '</h5><p>' + esc(texto(b[1])) + '</p></div>'; }).join('') +
           '</div></section>' : '') +
         '</div>' +
       '</div>' +
-
-      ((d.escala_aplicacao || d.tempo_resultado || d.referencias) ? '<div class="ficha-rodape">' +
-        (d.escala_aplicacao ? '<div><b>Escala de aplicação:</b> ' + esc(d.escala_aplicacao) + '</div>' : '') +
-        (d.tempo_resultado ? '<div><b>Tempo até o resultado:</b> ' + esc(d.tempo_resultado) + '</div>' : '') +
-        (d.referencias ? '<div><b>Referências:</b> ' + esc(d.referencias) + '</div>' : '') +
-      '</div>' : '') +
+      (rodape ? '<div class="ficha-rodape">' + rodape + '</div>' : '') +
     '</article>';
   }
 
@@ -428,8 +468,30 @@
     } catch (e) { if (meu === token) erro(e); }
   }
 
+  /**
+   * Conteúdo avulso no mesmo painel inferior — usado pelo relatório de um
+   * local (js/desenho.js). Mesmo comportamento: o mapa encolhe e se reenquadra
+   * em `opcoes.extent`; X, Esc e arraste fecham.
+   */
+  function mostrarConteudo(opcoes) {
+    token++;
+    mostrarPainel();
+    M.selecionarArea(null);
+    ficha.nivel = 'avulso'; ficha.tema = null; ficha.solucao = null;
+    trilha.innerHTML = '<span class="atual" aria-current="page">' + esc(opcoes.titulo || '') + '</span>';
+    btnVoltar.hidden = true;
+    tingirCorpo(null);
+    corpo.innerHTML = opcoes.html || '';
+    if (opcoes.extent) {
+      M.map.getView().fit(opcoes.extent, { padding: [50, 50, 50, 50], maxZoom: 16, duration: NS.menosMovimento() ? 0 : 450 });
+    }
+    paraOTopo();
+    return corpo;
+  }
+
   NS.fichas = {
     abrirArea: abrirArea,
+    mostrarConteudo: mostrarConteudo,
     fechar: fechar,
     aberto: function () { return aberto; },
     fracao: function () { return fracao; }

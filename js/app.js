@@ -43,10 +43,7 @@
       return;
     }
 
-    // 3. Catálogo em paralelo: não depende da grade.
-    NS.ferramentas.carregarCatalogo();
-
-    // 4. Grade e distritos juntos; um não derruba o outro.
+    // 3. Grade, distritos e áreas juntos; um não derruba o outro.
     var tarefas = await Promise.allSettled([M.carregarGrade(setLoading), M.carregarDistritos(), M.carregarAreas()]);
     var grade = tarefas[0], distr = tarefas[1], areas = tarefas[2];
 

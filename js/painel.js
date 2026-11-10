@@ -432,12 +432,14 @@ window.SIGWEB = window.SIGWEB || {};
     $('info-content').innerHTML =
       '<div class="info-title">Célula ' + esc(props.h3_index || '') + '</div>' +
       '<table>' + linhas + '</table>' +
-      '<div class="hint-text">Ligue "Gráfico de radar ao clicar" em Camadas para ver os grupos que compõem o valor.</div>';
+      '<div class="hint-text">Ligue o "Gráfico de radar" em Camadas → Ferramentas da camada para ver os grupos que compõem o valor.</div>';
     $('info-panel').hidden = false;
   }
 
   // =================== 8. CLIQUE NO MAPA ==============================
   M.map.on('singleclick', function (evt) {
+    // Com uma ferramenta de desenho ativa (medir/relatório), o clique é um vértice.
+    if (NS.desenho && NS.desenho.ativo()) return;
     // No celular, tocar no mapa com um painel aberto só fecha o painel.
     if (painelAtual && NS.ehCelular()) { fecharPainel(); return; }
 
@@ -445,7 +447,7 @@ window.SIGWEB = window.SIGWEB || {};
     var achou = null;
     M.map.forEachFeatureAtPixel(evt.pixel, function (f, layer) { achou = { f: f, layer: layer }; return true; }, {
       hitTolerance: 4,
-      layerFilter: function (l) { return l === M.uploadedLayer || l.get('catalogo') === true; }
+      layerFilter: function (l) { return l === M.uploadedLayer; }
     });
     if (achou) {
       var titulo = achou.layer === M.uploadedLayer ? 'Feição enviada' : achou.layer.get('titulo');
@@ -453,12 +455,12 @@ window.SIGWEB = window.SIGWEB || {};
       return;
     }
 
-    // 2º: áreas prioritárias -> abre o painel inferior (Área > Tema > SbN > Ficha)
-    if (M.areasLayer.getVisible()) {
+    // 2º: áreas prioritárias (camada limpa ou por temática) -> painel inferior
+    if (M.areasLayer.getVisible() || M.areasBaseLayer.getVisible()) {
       var area = null;
       M.map.forEachFeatureAtPixel(evt.pixel, function (f) { area = f; return true; }, {
         hitTolerance: 3,
-        layerFilter: function (l) { return l === M.areasLayer; }
+        layerFilter: function (l) { return l === M.areasLayer || l === M.areasBaseLayer; }
       });
       if (area && NS.fichas) {
         fecharDashboard(); fecharInfo();
@@ -496,14 +498,27 @@ window.SIGWEB = window.SIGWEB || {};
   M.map.on('pointermove', function (evt) {
     if (evt.dragging) return;
     var hit = M.map.hasFeatureAtPixel(evt.pixel, {
-      layerFilter: function (l) { return l === M.hexLayer || l === M.areasLayer || l === M.uploadedLayer || l.get('catalogo') === true; }
+      layerFilter: function (l) { return l === M.hexLayer || l === M.areasLayer || l === M.areasBaseLayer || l === M.uploadedLayer; }
     });
     M.map.getTargetElement().style.cursor = hit ? 'pointer' : '';
+  });
+
+  // =================== 8b. BOTÕES ⓘ (explicações recolhíveis) =========
+  document.addEventListener('click', function (e) {
+    var b = e.target.closest('.info-btn');
+    if (!b) return;
+    var alvo = $(b.getAttribute('aria-controls'));
+    if (!alvo) return;
+    var abrir = b.getAttribute('aria-expanded') !== 'true';
+    b.setAttribute('aria-expanded', String(abrir));
+    alvo.hidden = !abrir;
   });
 
   // =================== 9. TECLA ESC GLOBAL ============================
   document.addEventListener('keydown', function (e) {
     if (e.key !== 'Escape') return;
+    // Primeiro cancela um desenho em curso (medir/relatório), depois o resto.
+    if (NS.desenho && NS.desenho.cancelarDesenho()) return;
     if (dashboardOverlay.style.display === 'flex') { fecharDashboard(); return; }
     if (!$('info-panel').hidden) { fecharInfo(); return; }
     if (!listaSug.hidden) { fecharSugestoes(); return; }
@@ -537,6 +552,15 @@ window.SIGWEB = window.SIGWEB || {};
       M.hexLayer.setOpacity(e.target.value / 100);
       $('opacity-value').textContent = e.target.value;
     });
+    // Opacidade do PREENCHIMENTO (estilo) x opacidade da GRADE (camada inteira)
+    $('fill-opacity-slider').addEventListener('input', function (e) {
+      M.setOpacidadePreenchimento(e.target.value / 100);
+      $('fill-opacity-value').textContent = e.target.value;
+    });
+    $('toggle-areas-base').addEventListener('change', function (e) {
+      M.setAreasBaseVisiveis(e.target.checked);
+      if (!e.target.checked && !M.areasLayer.getVisible() && NS.fichas) NS.fichas.fechar();
+    });
     $('toggle-paleta').addEventListener('change', function (e) {
       M.setPaletaAcessivel(e.target.checked);
     });
@@ -545,7 +569,7 @@ window.SIGWEB = window.SIGWEB || {};
       M.setAreasVisiveis(e.target.checked);
       document.querySelectorAll('#temas-lista input').forEach(function (i) { i.disabled = !e.target.checked; });
       $('toggle-areas-rotulos').disabled = !e.target.checked;
-      if (!e.target.checked && NS.fichas) NS.fichas.fechar();
+      if (!e.target.checked && !M.areasBaseLayer.getVisible() && NS.fichas) NS.fichas.fechar();
     });
     $('toggle-areas-rotulos').addEventListener('change', function (e) {
       M.setRotulosAreas(e.target.checked);
@@ -585,8 +609,10 @@ window.SIGWEB = window.SIGWEB || {};
   /** O script 06 ainda não rodou (ou a view não está publicada): explica em vez de falhar calado. */
   function areasIndisponiveis() {
     $('toggle-areas').checked = false; $('toggle-areas').disabled = true;
+    $('toggle-areas-base').checked = false; $('toggle-areas-base').disabled = true;
+    M.setAreasBaseVisiveis(false);
     $('toggle-areas-rotulos').disabled = true;
-    $('areas-aviso').hidden = false; $('areas-dica').hidden = true;
+    $('areas-aviso').hidden = false;
     M.setAreasVisiveis(false);
   }
 

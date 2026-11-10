@@ -7,7 +7,7 @@
   <!--
   ======================================================================
   SIGWEB SBN MARICÁ — frontend estático
-  VERSÃO: v3.2.0 — Etapas 1 a 3 (interface, camadas do índice, áreas prioritárias e fichas de SbN)
+  VERSÃO: v3.3.0 — interface, camadas do índice, áreas prioritárias, fichas de SbN, medir e relatório do local
 
   Dados: PostgreSQL/PostGIS + API REST (PostgREST), chave pública + RLS somente leitura
   Hospedagem: GitHub Pages (arquivos estáticos, sem servidor próprio)
@@ -27,9 +27,16 @@
     ferramentas.js filtro, upload, exportação e outras camadas
     painel.js      barra superior, busca, faixa de ícones, painéis, janela de detalhes
     fichas.js      painel inferior: Área -> Tema -> lista de SbN -> ficha
+    desenho.js     medir distância/área e relatório de um ponto ou área desenhada
     app.js         inicialização e ligação entre as partes
 
   CHANGELOG
+  v3.3.0 Menu Camadas reorganizado (Risco Climático -> Priorização Territorial ->
+         Áreas por Temática), ferramentas da camada agrupadas (opacidade do
+         preenchimento nova, opacidade da grade, gráfico de radar, filtro),
+         explicações recolhidas em botões ⓘ, status de conexão no Sobre, "Outras
+         camadas" retiradas; nomes dos distritos centralizados; medir distância e
+         área; relatório de ponto/área (até 10 km²) exportável; fichas nas cores do tema.
   v3.2.0 Camada "Áreas Prioritárias por Temática" (60 áreas, uma subcamada por tema,
          rótulos com o número da área) e painel inferior Área -> Tema -> SbN -> Ficha,
          em que o mapa encolhe em vez de ficar coberto. Fichas lidas do banco.
@@ -47,7 +54,7 @@
   <title>SIGWEB SBN Maricá</title>
   <link rel="icon" href="img/logo-marica.png">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@9.2.4/ol.css">
-  <link rel="stylesheet" href="css/estilo.css?v=3.2.0">
+  <link rel="stylesheet" href="css/estilo.css?v=3.3.0">
 </head>
 <body>
 
@@ -153,62 +160,102 @@
 
     <div class="painel-corpo">
 
-      <!-- ---------------- CAMADAS ---------------- -->
+      <!-- ---------------- CAMADAS ----------------
+           v3.3.0: três grupos na ordem do raciocínio do estudo —
+           Risco Climático -> Priorização Territorial (60 áreas) -> Áreas por Temática.
+           Explicações recolhidas em botões ⓘ (aria-expanded/aria-controls). -->
       <section class="painel-secao" data-secao="camadas" hidden>
-        <div id="conn-status" class="conn-status" role="status">Conectando à base de dados…</div>
 
-        <h3>Índice de Risco Climático</h3>
-        <div class="control-group checkbox-row">
-          <input type="checkbox" id="toggle-hex" checked>
-          <label for="toggle-hex">Exibir a grade hexagonal</label>
+        <h3>Risco Climático</h3>
+        <div class="ctrl-linha">
+          <div class="checkbox-row"><input type="checkbox" id="toggle-hex" checked>
+            <label for="toggle-hex">Exibir a grade hexagonal</label></div>
+          <button type="button" class="info-btn" aria-expanded="false" aria-controls="info-grade" aria-label="Explicação: grade hexagonal" title="O que é isto?"><svg class="icone" aria-hidden="true"><use href="#i-sobre"></use></svg></button>
         </div>
+        <div class="info-texto" id="info-grade" hidden>Grade hexagonal H3 (resolução 10): cada célula cobre cerca de 0,015 km². Os valores são médias dentro da célula — leia-os como tendência da área, não como medida de um lote.</div>
 
         <!-- As quatro camadas usam a MESMA grade: são atributos diferentes da
              mesma feição, não camadas empilháveis. Por isso são rádios. -->
         <fieldset class="grupo-indice">
           <legend class="sr-only">Camada exibida na grade</legend>
-          <div class="radio-row">
-            <input type="radio" name="indice" id="indice-final" value="final" checked>
-            <label for="indice-final">Índice de Risco Climático em Grade Hexagonal</label>
+          <div class="ctrl-linha topo">
+            <div class="radios">
+              <div class="radio-row"><input type="radio" name="indice" id="indice-final" value="final" checked>
+                <label for="indice-final">Índice de Risco Climático</label></div>
+              <div class="radio-row"><input type="radio" name="indice" id="indice-ameaca" value="ameaca">
+                <label for="indice-ameaca">Ameaças Climáticas</label></div>
+              <div class="radio-row"><input type="radio" name="indice" id="indice-exposicao" value="exposicao">
+                <label for="indice-exposicao">Exposição</label></div>
+              <div class="radio-row"><input type="radio" name="indice" id="indice-vulnerabilidade" value="vulnerabilidade">
+                <label for="indice-vulnerabilidade">Vulnerabilidade</label></div>
+            </div>
+            <button type="button" class="info-btn" aria-expanded="false" aria-controls="info-indices" aria-label="Explicação: camadas do risco climático" title="O que é isto?"><svg class="icone" aria-hidden="true"><use href="#i-sobre"></use></svg></button>
           </div>
-          <div class="radio-row">
-            <input type="radio" name="indice" id="indice-ameaca" value="ameaca">
-            <label for="indice-ameaca">Ameaça Climática</label>
-          </div>
-          <div class="radio-row">
-            <input type="radio" name="indice" id="indice-exposicao" value="exposicao">
-            <label for="indice-exposicao">Exposição Socioambiental</label>
-          </div>
-          <div class="radio-row">
-            <input type="radio" name="indice" id="indice-vulnerabilidade" value="vulnerabilidade">
-            <label for="indice-vulnerabilidade">Vulnerabilidade Climática</label>
-          </div>
+          <div class="info-texto" id="info-indices" hidden>As quatro camadas usam a mesma grade. O <strong>Índice de Risco Climático</strong> combina as outras três: <strong>Ameaças Climáticas</strong>, <strong>Exposição</strong> (socioambiental) e <strong>Vulnerabilidade</strong> (climática). Cada uma tem as suas classes (quebras naturais do estudo), por isso a mesma cor não significa o mesmo valor em camadas diferentes.</div>
         </fieldset>
         <div class="hint-text" id="indice-aviso" hidden>
           Os três mapas intermediários ainda não estão disponíveis nesta base.
           Rode <code>supabase/05_camadas_do_indice.sql</code> no SQL Editor e recarregue a página.
         </div>
 
-        <div class="control-group">
-          <label for="opacity-slider">Opacidade da grade (<span id="opacity-value">100</span>%)</label>
+        <!-- Ferramentas que só valem para a grade do risco climático -->
+        <div class="ferramentas-camada" role="group" aria-labelledby="titulo-ferr-risco">
+          <h4 id="titulo-ferr-risco">Ferramentas da camada</h4>
+
+          <div class="ctrl-linha">
+            <label for="fill-opacity-slider">Opacidade do preenchimento (<span id="fill-opacity-value">100</span>%)</label>
+            <button type="button" class="info-btn" aria-expanded="false" aria-controls="info-preenchimento" aria-label="Explicação: opacidade do preenchimento" title="O que é isto?"><svg class="icone" aria-hidden="true"><use href="#i-sobre"></use></svg></button>
+          </div>
+          <div class="info-texto" id="info-preenchimento" hidden>Controla a transparência do <strong>interior</strong> dos hexágonos, mantendo os limites visíveis na cor da classe. Ajuda a ver o mapa de fundo e a identificar áreas menores sem perder a leitura do risco.</div>
+          <input type="range" id="fill-opacity-slider" min="0" max="100" value="100">
+
+          <div class="ctrl-linha">
+            <label for="opacity-slider">Opacidade da grade (<span id="opacity-value">100</span>%)</label>
+            <button type="button" class="info-btn" aria-expanded="false" aria-controls="info-opacidade" aria-label="Explicação: opacidade da grade" title="O que é isto?"><svg class="icone" aria-hidden="true"><use href="#i-sobre"></use></svg></button>
+          </div>
+          <div class="info-texto" id="info-opacidade" hidden>Controla a transparência de <strong>toda</strong> a camada, incluindo o preenchimento e os contornos.</div>
           <input type="range" id="opacity-slider" min="0" max="100" value="100">
-        </div>
-        <div class="control-group checkbox-row">
-          <input type="checkbox" id="toggle-radar" checked>
-          <label for="toggle-radar">Gráfico de radar ao clicar</label>
-        </div>
-        <div class="hint-text">
-          Clique em um hexágono para ver os indicadores daquela célula. Com a chave desligada,
-          o clique mostra apenas um resumo com os valores — sem consulta nova ao banco.
+
+          <div class="ctrl-linha">
+            <div class="checkbox-row"><input type="checkbox" id="toggle-radar" checked>
+              <label for="toggle-radar">Gráfico de radar</label></div>
+            <button type="button" class="info-btn" aria-expanded="false" aria-controls="info-radar" aria-label="Explicação: gráfico de radar" title="O que é isto?"><svg class="icone" aria-hidden="true"><use href="#i-sobre"></use></svg></button>
+          </div>
+          <div class="info-texto" id="info-radar" hidden>Vale só para esta camada. Ligado: ao selecionar um hexágono abre o gráfico com os indicadores daquela célula. Desligado: o clique mostra apenas um resumo com os valores, sem consulta nova ao banco.</div>
+
+          <div class="ctrl-linha">
+            <span class="rotulo-ferr">Filtrar por indicador: <strong id="filter-camada">Índice de Risco Climático</strong></span>
+            <button type="button" class="info-btn" aria-expanded="false" aria-controls="info-filtro" aria-label="Explicação: filtro por indicador" title="O que é isto?"><svg class="icone" aria-hidden="true"><use href="#i-sobre"></use></svg></button>
+          </div>
+          <div class="info-texto" id="info-filtro" hidden>Mostra só os hexágonos com valor entre o mínimo e o máximo informados (pode usar só um dos dois). O filtro vale para a camada exibida e é limpo ao trocar de camada. Também é possível ocultar classes clicando nelas na legenda.</div>
+          <div class="control-group two-cols">
+            <div><label for="filter-min">Mínimo</label><input type="number" id="filter-min" step="any" placeholder="ex: 2.47"></div>
+            <div><label for="filter-max">Máximo</label><input type="number" id="filter-max" step="any" placeholder="ex: 3.59"></div>
+          </div>
+          <div class="botoes-linha">
+            <button class="btn btn-primary" type="button" id="apply-filter">Aplicar</button>
+            <button class="btn btn-secondary" type="button" id="clear-filter">Limpar</button>
+          </div>
+          <div id="filter-status" class="status-text" role="status"></div>
         </div>
 
-        <!-- Grupo 2: as 60 áreas. Uma caixa por tema; uma área com mais de um tema
-             aparece em cada tema ligado (contorno em faixas, uma cor por tema). -->
-        <h3>Áreas Prioritárias por Temática</h3>
-        <div class="control-group checkbox-row">
-          <input type="checkbox" id="toggle-areas" checked>
-          <label for="toggle-areas">Exibir as áreas prioritárias</label>
+        <h3>Priorização Territorial</h3>
+        <div class="ctrl-linha">
+          <div class="checkbox-row"><input type="checkbox" id="toggle-areas-base">
+            <label for="toggle-areas-base">Áreas Prioritárias para Adaptação Climática <span class="tema-n">(60 áreas)</span></label></div>
+          <button type="button" class="info-btn" aria-expanded="false" aria-controls="info-areas60" aria-label="Explicação: áreas prioritárias para adaptação climática" title="O que é isto?"><svg class="icone" aria-hidden="true"><use href="#i-sobre"></use></svg></button>
         </div>
+        <div class="info-texto" id="info-areas60" hidden>Reúne as 60 áreas delimitadas a partir da análise de risco climático, que constituem o foco territorial das estratégias de adaptação. Clique numa área para ver as soluções baseadas na natureza (SbN) indicadas para ela.</div>
+
+        <!-- Grupo 3: as mesmas 60 áreas, uma chave por tema; uma área com mais de
+             um tema aparece em cada tema ligado (contorno em faixas). -->
+        <h3>Áreas Prioritárias por Temática</h3>
+        <div class="ctrl-linha">
+          <div class="checkbox-row"><input type="checkbox" id="toggle-areas" checked>
+            <label for="toggle-areas">Exibir as áreas por temática</label></div>
+          <button type="button" class="info-btn" aria-expanded="false" aria-controls="info-tematicas" aria-label="Explicação: áreas por temática" title="O que é isto?"><svg class="icone" aria-hidden="true"><use href="#i-sobre"></use></svg></button>
+        </div>
+        <div class="info-texto" id="info-tematicas" hidden>Cada uma das 60 áreas foi associada a um ou mais temas estratégicos. Ligue ou desligue os temas para filtrar; uma área com mais de um tema ligado aparece com o contorno em faixas, uma cor por tema. Clique numa área para abrir o painel de soluções (SbN). Com as áreas ligadas, o clique dentro delas abre esse painel; para ver o radar de um hexágono, clique fora das áreas ou desligue as camadas de áreas.</div>
         <div id="temas-lista" class="temas-lista" role="group" aria-label="Temas estratégicos"></div>
         <div class="control-group checkbox-row nested">
           <input type="checkbox" id="toggle-areas-rotulos" checked>
@@ -218,82 +265,68 @@
           As áreas prioritárias ainda não estão disponíveis nesta base.
           Rode <code>supabase/06_areas_prioritarias_e_sbn.sql</code> no SQL Editor e recarregue a página.
         </div>
-        <div class="hint-text" id="areas-dica">
-          Clique numa área para abrir o painel de soluções (SbN) indicadas para ela.
-          Com as áreas ligadas, o clique dentro delas abre esse painel; para ver o radar de um hexágono, clique fora das áreas ou desligue a camada.
-        </div>
 
         <h3>Limites</h3>
-        <div class="control-group checkbox-row">
-          <input type="checkbox" id="toggle-distritos" checked>
-          <label for="toggle-distritos">Limites distritais</label>
+        <div class="ctrl-linha">
+          <div class="checkbox-row"><input type="checkbox" id="toggle-distritos" checked>
+            <label for="toggle-distritos">Limites distritais</label></div>
+          <button type="button" class="info-btn" aria-expanded="false" aria-controls="info-limites" aria-label="Explicação: limites distritais" title="O que é isto?"><svg class="icone" aria-hidden="true"><use href="#i-sobre"></use></svg></button>
         </div>
+        <div class="info-texto" id="info-limites" hidden>Limites dos quatro distritos de Maricá (Maricá, Ponta Negra, Inoã e Itaipuaçu).</div>
         <div class="control-group checkbox-row nested">
           <input type="checkbox" id="toggle-distritos-labels">
           <label for="toggle-distritos-labels" class="small-label">Mostrar nomes dos distritos</label>
         </div>
-
-        <h3>Outras camadas</h3>
-        <div id="catalog-list"><div class="hint-text">Carregando catálogo…</div></div>
-        <details class="manual-connect">
-          <summary>Conectar outra tabela/view</summary>
-          <div class="control-group">
-            <label for="manual-table">Nome da tabela ou view (geometria em EPSG:4326)</label>
-            <input type="text" id="manual-table" placeholder="ex: vw_minha_camada" autocomplete="off">
-          </div>
-          <div class="control-group two-cols">
-            <div><label for="manual-color">Cor</label><input type="color" id="manual-color" value="#ff7f00"></div>
-            <div><label for="manual-title">Título</label><input type="text" id="manual-title" placeholder="opcional"></div>
-          </div>
-          <button class="btn btn-secondary" type="button" id="manual-connect-btn">Conectar camada</button>
-          <div id="manual-status" class="status-text"></div>
-        </details>
       </section>
 
       <!-- ---------------- MAPA BASE ---------------- -->
       <section class="painel-secao" data-secao="mapa-base" hidden>
+        <div class="ctrl-linha"><span class="rotulo-ferr">Escolha o mapa de fundo</span>
+          <button type="button" class="info-btn" aria-expanded="false" aria-controls="info-basemap" aria-label="Explicação: mapas base" title="O que é isto?"><svg class="icone" aria-hidden="true"><use href="#i-sobre"></use></svg></button></div>
+        <div class="info-texto" id="info-basemap" hidden>A miniatura é um tile real do provedor, na altura de Maricá — se ela aparecer, o mapa base está respondendo. Se um provedor falhar durante o uso, o portal volta sozinho para o OpenStreetMap e avisa.</div>
         <div id="basemap-list" class="basemap-list" role="radiogroup" aria-label="Mapa base"></div>
-        <div class="hint-text">
-          A miniatura é um tile real do provedor, na altura de Maricá — se ela aparecer, o mapa base está respondendo.
-          Se um provedor falhar durante o uso, o portal volta sozinho para o OpenStreetMap e avisa.
-        </div>
       </section>
 
       <!-- ---------------- LEGENDA ---------------- -->
       <section class="painel-secao" data-secao="legenda" hidden>
+        <div class="ctrl-linha"><span class="rotulo-ferr">Camada exibida na grade</span>
+          <button type="button" class="info-btn" aria-expanded="false" aria-controls="info-legenda" aria-label="Explicação: legenda" title="O que é isto?"><svg class="icone" aria-hidden="true"><use href="#i-sobre"></use></svg></button></div>
+        <div class="info-texto" id="info-legenda" hidden>Clique numa classe para ocultá-la ou exibi-la no mapa.</div>
         <div id="legenda-painel"></div>
-        <div class="hint-text">Clique numa classe para ocultá-la ou exibi-la no mapa.</div>
-        <div class="control-group checkbox-row">
-          <input type="checkbox" id="toggle-paleta">
-          <label for="toggle-paleta">Paleta segura para daltonismo</label>
+        <div class="ctrl-linha">
+          <div class="checkbox-row"><input type="checkbox" id="toggle-paleta">
+            <label for="toggle-paleta">Paleta segura para daltonismo</label></div>
+          <button type="button" class="info-btn" aria-expanded="false" aria-controls="info-paleta" aria-label="Explicação: paleta segura para daltonismo" title="O que é isto?"><svg class="icone" aria-hidden="true"><use href="#i-sobre"></use></svg></button>
         </div>
-        <div class="hint-text">
-          Troca as cores do estudo por uma escala sequencial única (ColorBrewer YlOrRd), legível
-          por quem tem daltonismo. As <strong>faixas não mudam</strong> — só as cores.
-        </div>
+        <div class="info-texto" id="info-paleta" hidden>Troca as cores do estudo por uma escala sequencial única (ColorBrewer YlOrRd), legível por quem tem daltonismo. As <strong>faixas não mudam</strong> — só as cores.</div>
       </section>
 
-      <!-- ---------------- FERRAMENTAS ---------------- -->
+      <!-- ---------------- FERRAMENTAS ----------------
+           Medir e Relatório usam a mesma camada de desenho (js/desenho.js);
+           só uma ferramenta de desenho fica ativa por vez. -->
       <section class="painel-secao" data-secao="ferramentas" hidden>
-        <h3>Filtrar por indicador</h3>
-        <div class="hint-text">O filtro vale para a camada exibida: <strong id="filter-camada">Índice de Risco Climático</strong>.</div>
-        <div class="control-group two-cols">
-          <div><label for="filter-min">Mínimo</label><input type="number" id="filter-min" step="any" placeholder="ex: 2.47"></div>
-          <div><label for="filter-max">Máximo</label><input type="number" id="filter-max" step="any" placeholder="ex: 3.59"></div>
+        <div class="ctrl-linha cab"><h3>Medir</h3><button type="button" class="info-btn" aria-expanded="false" aria-controls="info-medir" aria-label="Explicação: medir" title="O que é isto?"><svg class="icone" aria-hidden="true"><use href="#i-sobre"></use></svg></button></div>
+        <div class="info-texto" id="info-medir" hidden>Medidas no padrão métrico, com cálculo geodésico sobre a esfera terrestre — não no plano do Web Mercator, que em Maricá aumenta as áreas em cerca de 17%. Clique para adicionar vértices e dê <strong>duplo clique</strong> para terminar (no celular, use o botão Concluir). <kbd>Esc</kbd> cancela o desenho em curso.</div>
+        <div class="botoes-ferr" role="group" aria-label="Medir">
+          <button class="btn btn-ferr" type="button" data-desenho="distancia" aria-pressed="false">Distância</button>
+          <button class="btn btn-ferr" type="button" data-desenho="area" aria-pressed="false">Área</button>
+          <button class="btn btn-secondary" type="button" id="medir-limpar">Limpar</button>
         </div>
-        <button class="btn btn-primary" type="button" id="apply-filter">Aplicar filtro</button>
-        <button class="btn btn-secondary" type="button" id="clear-filter">Limpar filtro</button>
-        <div id="filter-status" class="status-text"></div>
+        <div id="medidas-lista" class="medidas-lista" aria-live="polite"></div>
 
-        <h3>Upload de camada</h3>
+        <div class="ctrl-linha cab"><h3>Relatório de um local</h3><button type="button" class="info-btn" aria-expanded="false" aria-controls="info-relatorio" aria-label="Explicação: relatório de um local" title="O que é isto?"><svg class="icone" aria-hidden="true"><use href="#i-sobre"></use></svg></button></div>
+        <div class="info-texto" id="info-relatorio" hidden>Desenhe um <strong>ponto</strong> ou uma <strong>área</strong> (até 10 km² = 1.000 ha) e receba um resumo do risco climático no local — médias ponderadas pela área de cada hexágono, distribuição por classe, indicadores por grupo — e das áreas prioritárias e temas que ele toca. Uma consulta por vez. O relatório abre no painel inferior e pode ser baixado (HTML imprimível, CSV e GeoJSON).</div>
+        <div class="botoes-ferr" role="group" aria-label="Relatório de um local">
+          <button class="btn btn-ferr" type="button" data-desenho="rel-ponto" aria-pressed="false">Ponto</button>
+          <button class="btn btn-ferr" type="button" data-desenho="rel-area" aria-pressed="false">Área</button>
+          <button class="btn btn-secondary" type="button" id="relatorio-limpar">Limpar</button>
+        </div>
+        <div id="relatorio-status" class="status-text" role="status"></div>
+
+        <div class="ctrl-linha cab"><h3>Analisar arquivo</h3><button type="button" class="info-btn" aria-expanded="false" aria-controls="info-upload" aria-label="Explicação: analisar arquivo" title="O que é isto?"><svg class="icone" aria-hidden="true"><use href="#i-sobre"></use></svg></button></div>
+        <div class="info-texto" id="info-upload" hidden><strong>KML:</strong> envie o arquivo .kml diretamente.<br><strong>Shapefile:</strong> compacte .shp, .shx, .dbf e .prj num único .zip (o .prj é obrigatório; inclua o .cpg para os acentos saírem certos).<br>Pontos, linhas e polígonos. O arquivo é processado só no seu navegador — nada é enviado ao servidor. Os valores usam a camada exibida na grade.</div>
         <div class="control-group">
           <input type="file" id="upload-input" accept=".kml,.zip" aria-label="Arquivo KML ou Shapefile zip">
-        </div>
-        <div class="hint-text">
-          <strong>KML:</strong> envie o arquivo .kml diretamente.<br>
-          <strong>Shapefile:</strong> compacte .shp, .shx, .dbf e .prj num único .zip (o .prj é obrigatório;
-          inclua o .cpg para os acentos saírem certos).<br>
-          Pontos, linhas e polígonos. O arquivo é processado só no seu navegador — nada é enviado ao servidor.
         </div>
         <button class="btn btn-secondary" type="button" id="clear-upload-btn">Remover camada carregada</button>
         <div id="upload-status" class="status-text"></div>
@@ -302,6 +335,8 @@
 
       <!-- ---------------- EXPORTAR ---------------- -->
       <section class="painel-secao" data-secao="exportar" hidden>
+        <div class="ctrl-linha"><span class="rotulo-ferr">Baixar os dados do mapa</span><button type="button" class="info-btn" aria-expanded="false" aria-controls="info-exportar" aria-label="Explicação: exportar" title="O que é isto?"><svg class="icone" aria-hidden="true"><use href="#i-sobre"></use></svg></button></div>
+        <div class="info-texto" id="info-exportar" hidden>Arquivos gerados em EPSG:4326 (WGS 84). A grade respeita o filtro ativo. Para GeoPackage ou análises no SRC do projeto (EPSG:31983 — SIRGAS 2000 / UTM 23S), conecte o QGIS direto ao banco (ver README).</div>
         <div class="export-group">
           <div class="export-group-title">Grade hexagonal (respeita o filtro ativo)</div>
           <div class="export-buttons">
@@ -316,10 +351,6 @@
             <button class="btn btn-secondary" type="button" data-export="distritos" data-format="geojson">GeoJSON</button>
             <button class="btn btn-secondary" type="button" data-export="distritos" data-format="kml">KML</button>
           </div>
-        </div>
-        <div class="hint-text">
-          Arquivos gerados em EPSG:4326 (WGS 84). Para GeoPackage ou análises no SRC do projeto
-          (EPSG:31983 — SIRGAS 2000 / UTM 23S), conecte o QGIS direto ao banco (ver README).
         </div>
       </section>
 
@@ -346,11 +377,18 @@
           resulta da combinação de Ameaça Climática, Exposição Socioambiental e Vulnerabilidade Climática.
           Os valores são médias dentro de cada célula: leia-os como tendência da área, não como medida de um lote.
         </p>
+        <p class="texto">
+          As 60 <strong>Áreas Prioritárias para Adaptação Climática</strong> foram delimitadas a partir dessa
+          análise de risco e depois associadas aos temas estratégicos, cada um com as suas SbN.
+        </p>
+        <h3>Conexão com a base de dados</h3>
+        <div id="conn-status" class="conn-status" role="status">Conectando à base de dados…</div>
+
         <h3>Créditos</h3>
         <p class="texto" id="creditos-texto">
           Prefeitura de Maricá. Dados e metodologia: equipe do Estudo Estratégico de adaptação climática.
         </p>
-        <p class="texto nota">Versão 3.2.0 do portal.</p>
+        <p class="texto nota">Versão 3.3.0 do portal.</p>
       </section>
 
     </div>
@@ -457,13 +495,14 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 <!-- Ordem obrigatória: cada arquivo usa o anterior. Ao alterar qualquer um deles,
      aumente o ?v= de TODOS para os visitantes não ficarem com a versão em cache. -->
-<script src="js/config.js?v=3.2.0"></script>
-<script src="js/util.js?v=3.2.0"></script>
-<script src="js/api.js?v=3.2.0"></script>
-<script src="js/mapa.js?v=3.2.0"></script>
-<script src="js/ferramentas.js?v=3.2.0"></script>
-<script src="js/painel.js?v=3.2.0"></script>
-<script src="js/fichas.js?v=3.2.0"></script>
-<script src="js/app.js?v=3.2.0"></script>
+<script src="js/config.js?v=3.3.0"></script>
+<script src="js/util.js?v=3.3.0"></script>
+<script src="js/api.js?v=3.3.0"></script>
+<script src="js/mapa.js?v=3.3.0"></script>
+<script src="js/ferramentas.js?v=3.3.0"></script>
+<script src="js/painel.js?v=3.3.0"></script>
+<script src="js/fichas.js?v=3.3.0"></script>
+<script src="js/desenho.js?v=3.3.0"></script>
+<script src="js/app.js?v=3.3.0"></script>
 </body>
 </html>

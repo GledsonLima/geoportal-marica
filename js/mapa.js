@@ -62,7 +62,7 @@ window.SIGWEB = window.SIGWEB || {};
     },
     {
       id: 'ameaca', campo: 'indicador_mapa1', mapa: 1,
-      nome: 'Ameaça Climática', curto: 'Ameaça Climática',
+      nome: 'Ameaças Climáticas', curto: 'Ameaças Climáticas',
       classes: [
         { max: 1.78,     label: 'Muito baixa', faixa: '1,31 – 1,78', cor: '#85bdc1' },
         { max: 2.00,     label: 'Baixa',       faixa: '1,78 – 2,00', cor: '#b6d4aa' },
@@ -73,7 +73,7 @@ window.SIGWEB = window.SIGWEB || {};
     },
     {
       id: 'exposicao', campo: 'indicador_mapa2', mapa: 2,
-      nome: 'Exposição Socioambiental', curto: 'Exposição Socioambiental',
+      nome: 'Exposição Socioambiental', curto: 'Exposição',
       classes: [
         { max: 2.08,     label: 'Muito baixa', faixa: '1,00 – 2,08', cor: '#71bdbd' },
         { max: 2.86,     label: 'Baixa',       faixa: '2,08 – 2,86', cor: '#baede6' },
@@ -84,7 +84,7 @@ window.SIGWEB = window.SIGWEB || {};
     },
     {
       id: 'vulnerabilidade', campo: 'indicador_mapa3', mapa: 3,
-      nome: 'Vulnerabilidade Climática', curto: 'Vulnerabilidade Climática',
+      nome: 'Vulnerabilidade Climática', curto: 'Vulnerabilidade',
       classes: [
         { max: 1.58,     label: 'Muito baixa', faixa: '1,00 – 1,58', cor: '#3e70a0' },
         { max: 2.61,     label: 'Baixa',       faixa: '1,58 – 2,61', cor: '#7ab0c4' },
@@ -142,9 +142,9 @@ window.SIGWEB = window.SIGWEB || {};
     { mapa: 3, field: 'grupo_2_mapa_3_capa_adap_socioecono', label: 'Capacidade Adaptativa Socioeconômica' }
   ];
   var INTERMEDIATE_MAPS = [
-    { field: 'indicador_mapa1', label: 'Ameaça Climática' },
-    { field: 'indicador_mapa2', label: 'Exposição Socioambiental' },
-    { field: 'indicador_mapa3', label: 'Vulnerabilidade Climática' }
+    { field: 'indicador_mapa1', label: 'Ameaças Climáticas' },
+    { field: 'indicador_mapa2', label: 'Exposição' },
+    { field: 'indicador_mapa3', label: 'Vulnerabilidade' }
   ];
 
   /** Grupos de uma camada: no índice final, os nove; nos intermediários, os seus. */
@@ -269,6 +269,11 @@ window.SIGWEB = window.SIGWEB || {};
   var areasLayer = new ol.layer.Vector({
     source: areasSource, style: estiloArea, zIndex: 25, declutter: true
   });
+  // "Priorização territorial": as MESMAS 60 feições, só contorno, sem tema.
+  // Mesma fonte (sem segunda requisição); começa desligada.
+  var areasBaseLayer = new ol.layer.Vector({
+    source: areasSource, style: estiloAreaBase, zIndex: 24, declutter: true, visible: false
+  });
 
   var uploadedSource = new ol.source.Vector();
   var uploadedLayer = new ol.layer.Vector({
@@ -283,7 +288,7 @@ window.SIGWEB = window.SIGWEB || {};
 
   var map = new ol.Map({
     target: 'map',
-    layers: BASEMAPS.map(function (d) { return d.layer; }).concat([hexLayer, areasLayer, distritosLayer, uploadedLayer]),
+    layers: BASEMAPS.map(function (d) { return d.layer; }).concat([hexLayer, areasBaseLayer, areasLayer, distritosLayer, uploadedLayer]),
     view: new ol.View({
       center: ol.proj.fromLonLat(CFG.CENTRO_INICIAL || [-42.82, -22.92]),
       zoom: CFG.ZOOM_INICIAL || 11, maxZoom: 19
@@ -404,20 +409,39 @@ window.SIGWEB = window.SIGWEB || {};
   var filtro = { min: null, max: null };
   var classesOcultas = new Set();
   var ESTILOS_HEX = null;      // cache [semContorno[], comContorno[]] da camada ativa
+  var opacidadePreenchimento = 1;
 
+  /** '#rrggbb' + alfa -> 'rgba(r,g,b,a)' */
+  function comAlfa(hex, a) {
+    return 'rgba(' + parseInt(hex.substr(1, 2), 16) + ',' + parseInt(hex.substr(3, 2), 16) + ',' +
+           parseInt(hex.substr(5, 2), 16) + ',' + a + ')';
+  }
+
+  /*  Opacidade do PREENCHIMENTO (v3.3.0) é diferente da opacidade da CAMADA:
+      com o preenchimento transparente, o contorno de cada hexágono passa a ser
+      desenhado NA COR DA CLASSE, opaco, em qualquer zoom. Assim o fundo aparece
+      por dentro das células e a classe continua legível pela borda.            */
   function construirEstilos() {
     var cam = camadaAtiva();
+    var vazado = opacidadePreenchimento < 1;
     function conjunto(comContorno) {
-      var borda = comContorno ? new ol.style.Stroke({ color: 'rgba(35,35,35,0.55)', width: 0.6 }) : undefined;
-      var arr = cam.classes.map(function (c, i) {
-        return new ol.style.Style({ fill: new ol.style.Fill({ color: corDaClasse(cam, i) }), stroke: borda });
-      });
-      arr.push(new ol.style.Style({   // último índice: sem dado
-        fill: new ol.style.Fill({ color: SEM_DADO.cor }), stroke: borda
-      }));
+      function estilo(cor) {
+        var borda;
+        if (vazado) borda = new ol.style.Stroke({ color: cor, width: comContorno ? 1.4 : 0.9 });
+        else if (comContorno) borda = new ol.style.Stroke({ color: 'rgba(35,35,35,0.55)', width: 0.6 });
+        return new ol.style.Style({ fill: new ol.style.Fill({ color: comAlfa(cor, opacidadePreenchimento) }), stroke: borda });
+      }
+      var arr = cam.classes.map(function (c, i) { return estilo(corDaClasse(cam, i)); });
+      arr.push(estilo(SEM_DADO.cor));   // último índice: sem dado
       return arr;
     }
     ESTILOS_HEX = [conjunto(false), conjunto(true)];
+  }
+
+  function setOpacidadePreenchimento(v) {
+    opacidadePreenchimento = Math.max(0, Math.min(1, Number(v)));
+    construirEstilos();
+    hexLayer.changed();
   }
   construirEstilos();
 
@@ -511,18 +535,73 @@ window.SIGWEB = window.SIGWEB || {};
     new ol.style.Style({ stroke: new ol.style.Stroke({ color: '#1e2a38', width: 2.2 }) })
   ];
 
-  /** Ponto do rótulo: ponto interior da MAIOR parte (evita rótulo repetido em ilhas). */
+  /*  Rótulo centralizado (v3.3.0): o ponto interior do OpenLayers fica no meio
+      da linha horizontal que passa pelo centro do retângulo envolvente — em
+      polígonos alongados ou inclinados (os distritos de Maricá) ele encosta na
+      borda. Usamos o "polo de inacessibilidade" (algoritmo polylabel, Mapbox):
+      o ponto interno mais distante de todas as bordas, que é o centro visual.  */
+  function distAoSegmento2(px, py, a, b) {
+    var x = a[0], y = a[1], dx = b[0] - x, dy = b[1] - y;
+    if (dx !== 0 || dy !== 0) {
+      var t = ((px - x) * dx + (py - y) * dy) / (dx * dx + dy * dy);
+      if (t > 1) { x = b[0]; y = b[1]; } else if (t > 0) { x += dx * t; y += dy * t; }
+    }
+    dx = px - x; dy = py - y;
+    return dx * dx + dy * dy;
+  }
+  /** Distância com sinal ao contorno: positiva dentro do polígono. */
+  function distAoPoligono(x, y, aneis) {
+    var dentro = false, min = Infinity;
+    aneis.forEach(function (anel) {
+      for (var i = 0, n = anel.length, j = n - 1; i < n; j = i++) {
+        var a = anel[i], b = anel[j];
+        if ((a[1] > y) !== (b[1] > y) && x < (b[0] - a[0]) * (y - a[1]) / (b[1] - a[1]) + a[0]) dentro = !dentro;
+        min = Math.min(min, distAoSegmento2(x, y, a, b));
+      }
+    });
+    return (dentro ? 1 : -1) * Math.sqrt(min);
+  }
+  function celula(x, y, h, aneis) {
+    var d = distAoPoligono(x, y, aneis);
+    return { x: x, y: y, h: h, d: d, max: d + h * Math.SQRT2 };
+  }
+  function polylabel(aneis) {
+    var ext = aneis[0], minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    ext.forEach(function (c) { minX = Math.min(minX, c[0]); minY = Math.min(minY, c[1]); maxX = Math.max(maxX, c[0]); maxY = Math.max(maxY, c[1]); });
+    var w = maxX - minX, hgt = maxY - minY, tam = Math.min(w, hgt), precisao = Math.max(w, hgt) / 150;
+    if (!tam) return [minX, minY];
+    var fila = [], h = tam / 2;
+    for (var x = minX; x < maxX; x += tam) for (var y = minY; y < maxY; y += tam) fila.push(celula(x + h, y + h, h, aneis));
+    var melhor = celula(minX + w / 2, minY + hgt / 2, 0, aneis);
+    var guarda = 0;
+    while (fila.length && guarda++ < 20000) {
+      var k = 0;                                   // retira a célula mais promissora
+      for (var i = 1; i < fila.length; i++) if (fila[i].max > fila[k].max) k = i;
+      var c = fila.splice(k, 1)[0];
+      if (c.d > melhor.d) melhor = c;
+      if (c.max - melhor.d <= precisao) continue;  // não pode melhorar o suficiente
+      h = c.h / 2;
+      fila.push(celula(c.x - h, c.y - h, h, aneis), celula(c.x + h, c.y - h, h, aneis),
+                celula(c.x - h, c.y + h, h, aneis), celula(c.x + h, c.y + h, h, aneis));
+    }
+    return [melhor.x, melhor.y];
+  }
+
+  /** Ponto do rótulo: centro visual da MAIOR parte (evita rótulo repetido em ilhas). Calculado uma vez. */
   function pontoRotulo(feature) {
     var p = feature.get('_ptRotulo');
     if (p) return p;
-    var g = feature.getGeometry();
+    var g = feature.getGeometry(), pg = null;
     if (g instanceof ol.geom.MultiPolygon) {
-      var maior = null, area = -1;
-      g.getPolygons().forEach(function (pg) { var a = pg.getArea(); if (a > area) { area = a; maior = pg; } });
-      p = maior ? maior.getInteriorPoint() : null;
-    } else if (g && g.getInteriorPoint) {
-      p = g.getInteriorPoint();
+      var area = -1;
+      g.getPolygons().forEach(function (q) { var a = q.getArea(); if (a > area) { area = a; pg = q; } });
+    } else if (g instanceof ol.geom.Polygon) {
+      pg = g;
     }
+    if (pg && pg.getCoordinates) {
+      try { p = new ol.geom.Point(polylabel(pg.getCoordinates())); } catch (e) { p = null; }
+    }
+    if (!p && g && g.getInteriorPoint) p = g.getInteriorPoint();
     feature.set('_ptRotulo', p, true);
     return p;
   }
@@ -626,6 +705,29 @@ window.SIGWEB = window.SIGWEB || {};
     return extra.length ? st.concat(extra) : st;
   }
 
+  var ESTILO_AREA_BASE = [
+    new ol.style.Style({ fill: new ol.style.Fill({ color: 'rgba(45,58,70,0.07)' }),
+                         stroke: new ol.style.Stroke({ color: 'rgba(255,255,255,0.95)', width: 5 }) }),
+    new ol.style.Style({ stroke: new ol.style.Stroke({ color: '#2d3a46', width: 2.2 }) })
+  ];
+  function estiloAreaBase(feature) {
+    var extra = [];
+    var num = feature.get('num_area');
+    if (areaSelecionada !== null && num === areaSelecionada) extra.push(ESTILO_SELECAO);
+    // Número só se a camada por temática estiver desligada (evita rótulo duplicado)
+    if (rotulosAreas && !areasLayer.getVisible()) {
+      extra.push(new ol.style.Style({
+        geometry: pontoRotulo,
+        text: new ol.style.Text({
+          text: String(num), font: 'bold 13px "Segoe UI", Arial, sans-serif',
+          fill: new ol.style.Fill({ color: '#1f2933' }),
+          stroke: new ol.style.Stroke({ color: '#ffffff', width: 4 }), overflow: true
+        })
+      }));
+    }
+    return extra.length ? ESTILO_AREA_BASE.concat(extra) : ESTILO_AREA_BASE;
+  }
+
   async function carregarTemas() {
     try {
       var r = await NS.api.get((CFG.TABELA_TEMAS || 'tema_estrategico') +
@@ -674,12 +776,20 @@ window.SIGWEB = window.SIGWEB || {};
   function montarLegendaAreas() {
     var el = $('areas-legend-rows');
     if (!el) return;
-    el.innerHTML = temas.filter(function (t) { return temasVisiveis.has(t.id); }).map(function (t) {
-      return '<div class="legend-row"><span class="swatch-linha" style="background:' + esc(t.cor) + ';"></span>' +
-             '<span class="legend-label">' + esc(t.nome_curto) + '</span></div>';
-    }).join('');
+    var linhas = [];
+    if (areasBaseLayer.getVisible()) {
+      linhas.push('<div class="legend-row"><span class="swatch-linha" style="background:#2d3a46;"></span>' +
+                  '<span class="legend-label">Para adaptação climática (60)</span></div>');
+    }
+    if (areasLayer.getVisible()) {
+      temas.filter(function (t) { return temasVisiveis.has(t.id); }).forEach(function (t) {
+        linhas.push('<div class="legend-row"><span class="swatch-linha" style="background:' + esc(t.cor) + ';"></span>' +
+                    '<span class="legend-label">' + esc(t.nome_curto) + '</span></div>');
+      });
+    }
+    el.innerHTML = linhas.join('');
     var caixa = $('areas-legend');
-    if (caixa) caixa.hidden = !areasLayer.getVisible() || !temasVisiveis.size;
+    if (caixa) caixa.hidden = !linhas.length;
   }
 
   function setTemaVisivel(id, v) {
@@ -687,11 +797,13 @@ window.SIGWEB = window.SIGWEB || {};
     areasLayer.changed();
     montarLegendaAreas();
   }
-  function setAreasVisiveis(v) { areasLayer.setVisible(!!v); montarLegendaAreas(); }
-  function setRotulosAreas(v) { rotulosAreas = !!v; areasLayer.changed(); }
+  function setAreasVisiveis(v) { areasLayer.setVisible(!!v); areasBaseLayer.changed(); montarLegendaAreas(); }
+  function setAreasBaseVisiveis(v) { areasBaseLayer.setVisible(!!v); montarLegendaAreas(); }
+  function setRotulosAreas(v) { rotulosAreas = !!v; areasLayer.changed(); areasBaseLayer.changed(); }
   function selecionarArea(n) {
     areaSelecionada = (n === null || n === undefined) ? null : Number(n);
     areasLayer.changed();
+    areasBaseLayer.changed();
   }
 
   // =================== 8. EXPOSIÇÃO DO MÓDULO =========================
@@ -742,7 +854,10 @@ window.SIGWEB = window.SIGWEB || {};
     redesenharLegendas: redesenharLegendas,
     setRotulosDistritos: function (v) { mostrarRotulos = v; distritosLayer.changed(); },
 
-    areasSource: areasSource, areasLayer: areasLayer,
+    areasSource: areasSource, areasLayer: areasLayer, areasBaseLayer: areasBaseLayer,
+    setAreasBaseVisiveis: setAreasBaseVisiveis,
+    setOpacidadePreenchimento: setOpacidadePreenchimento,
+    polylabel: polylabel,
     carregarAreas: carregarAreas,
     temas: function () { return temas; },
     temaPorId: temaPorId,

@@ -1,6 +1,6 @@
 /* =====================================================================
-   ferramentas.js — filtro por indicador, upload e análise de sobreposição,
-                    exportação e catálogo de outras camadas.
+   ferramentas.js — filtro por indicador, upload e análise de sobreposição
+                    e exportação. (Medir e relatório: js/desenho.js.)
 
    Tudo roda no navegador, contra a grade já carregada:
      * Ponto    -> h3.latLngToCell(lat, lon, 10) dá a célula exata (sem teste geométrico)
@@ -17,8 +17,6 @@ window.SIGWEB = window.SIGWEB || {};
   var CFG = window.GEOPORTAL_CONFIG || {};
   var $ = NS.$, esc = NS.esc, num = NS.num, isNum = NS.isNum, pausa = NS.pausa;
   var M = NS.mapa;
-  var MAX_FEICOES = NS.api.MAX_FEICOES;
-  var NOME_VALIDO = NS.api.NOME_VALIDO;
 
   // =================== 1. FILTRO ======================================
   function atualizarStatusFiltro() {
@@ -56,117 +54,9 @@ window.SIGWEB = window.SIGWEB || {};
     });
   }
 
-  // =================== 2. CATÁLOGO DE OUTRAS CAMADAS ==================
-  var camadasCatalogo = new Map();   // tabela -> { def, layer, carregada }
-  NS.camadasCatalogo = camadasCatalogo;
-
-  function estiloCatalogo(def) {
-    var cor = /^#[0-9a-fA-F]{6}$/.test(def.cor || '') ? def.cor : '#ff7f00';
-    var base = new ol.style.Style({
-      stroke: new ol.style.Stroke({ color: cor, width: def.tipo_geometria === 'linha' ? 3 : 2 }),
-      fill: new ol.style.Fill({ color: cor + '33' }),
-      image: new ol.style.Circle({ radius: 5, fill: new ol.style.Fill({ color: cor }),
-        stroke: new ol.style.Stroke({ color: '#ffffff', width: 1.5 }) })
-    });
-    if (!def.campo_rotulo) return base;
-    return function (f, res) {
-      if (res > 20) return base;   // rótulos só a partir de ~zoom 13
-      return [base, new ol.style.Style({ text: new ol.style.Text({
-        text: String(f.get(def.campo_rotulo) == null ? '' : f.get(def.campo_rotulo)),
-        font: '12px "Segoe UI", Arial, sans-serif',
-        fill: new ol.style.Fill({ color: '#1e2a38' }),
-        stroke: new ol.style.Stroke({ color: '#fff', width: 3 }),
-        overflow: false }) })];
-    };
-  }
-
-  function adicionarItemCatalogo(def) {
-    if (camadasCatalogo.has(def.tabela)) return false;
-    var lista = $('catalog-list');
-    var vazio = lista.querySelector('.catalog-vazio');
-    if (vazio) vazio.remove();
-
-    var idChk = 'cat-' + def.tabela;
-    var item = document.createElement('div');
-    item.className = 'catalog-item';
-    item.innerHTML =
-      '<div class="checkbox-row"><input type="checkbox" id="' + esc(idChk) + '">' +
-      '<span class="catalog-swatch" style="background:' + esc(def.cor || '#ff7f00') + ';"></span>' +
-      '<label for="' + esc(idChk) + '">' + esc(def.titulo || def.tabela) + '</label></div>' +
-      '<div class="catalog-meta">' + (def.descricao ? esc(def.descricao) + '<br>' : '') +
-      (def.fonte ? 'Fonte: ' + esc(def.fonte) + '<br>' : '') +
-      '<code>' + esc(def.tabela) + '</code> <span class="cat-status"></span></div>';
-    lista.appendChild(item);
-
-    var entrada = { def: def, layer: null, carregada: false };
-    camadasCatalogo.set(def.tabela, entrada);
-    var chk = item.querySelector('input'), st = item.querySelector('.cat-status');
-
-    chk.addEventListener('change', async function () {
-      if (!chk.checked) { if (entrada.layer) entrada.layer.setVisible(false); return; }
-      if (entrada.carregada) { entrada.layer.setVisible(true); return; }
-      chk.disabled = true; st.textContent = '— carregando…';
-      try {
-        var r = await NS.api.getGeoJSONPaginado(def.tabela, def.campo_ordem, function (n) {
-          st.textContent = '— ' + n.toLocaleString('pt-BR') + ' feições…';
-        });
-        if (!NS.api.pareceWGS84(r.features)) {
-          throw new Error('A geometria não está em EPSG:4326 (graus). Publique uma view com ST_Transform(geom, 4326).');
-        }
-        var src = new ol.source.Vector({
-          features: new ol.format.GeoJSON().readFeatures(
-            { type: 'FeatureCollection', features: r.features },
-            { dataProjection: 'EPSG:4326', featureProjection: 'EPSG:3857' })
-        });
-        entrada.layer = new ol.layer.Vector({
-          source: src, style: estiloCatalogo(def), zIndex: 30 + (def.ordem || 0) / 1000
-        });
-        entrada.layer.set('catalogo', true);
-        entrada.layer.set('titulo', def.titulo || def.tabela);
-        M.map.addLayer(entrada.layer);
-        entrada.carregada = true;
-        st.textContent = '— ' + r.features.length.toLocaleString('pt-BR') + ' feições' +
-          (r.truncado ? ' (limitado a ' + MAX_FEICOES.toLocaleString('pt-BR') + ')' : '');
-      } catch (e) {
-        console.error('[catálogo] erro ao carregar', def.tabela, e);
-        st.textContent = '— erro: ' + e.message;
-        chk.checked = false;
-      } finally { chk.disabled = false; }
-    });
-
-    if (def.visivel_inicial) { chk.checked = true; chk.dispatchEvent(new Event('change')); }
-    return true;
-  }
-
-  async function carregarCatalogo() {
-    var lista = $('catalog-list');
-    try {
-      var defs = await NS.api.get((CFG.TABELA_CATALOGO || 'catalogo_camadas') + '?select=*&order=ordem.asc,titulo.asc');
-      lista.innerHTML = '';
-      var validas = defs.filter(function (d) { return NOME_VALIDO.test(d.tabela || ''); });
-      if (!validas.length) {
-        lista.innerHTML = '<div class="hint-text catalog-vazio">Nenhuma camada adicional cadastrada.</div>';
-      }
-      validas.forEach(adicionarItemCatalogo);
-    } catch (e) {
-      lista.innerHTML = '<div class="hint-text catalog-vazio">Catálogo indisponível no momento.</div>';
-      console.error('[catálogo] indisponível:', e);
-    }
-  }
-
-  function ligarConexaoManual() {
-    $('manual-connect-btn').addEventListener('click', function () {
-      var tabela = $('manual-table').value.trim().toLowerCase();
-      var st = $('manual-status');
-      if (!NOME_VALIDO.test(tabela)) { st.textContent = 'Nome inválido: use letras minúsculas, números e "_".'; return; }
-      var ok = adicionarItemCatalogo({
-        tabela: tabela, titulo: $('manual-title').value.trim() || tabela,
-        cor: $('manual-color').value,
-        descricao: 'Conectada manualmente (não fica salva).', visivel_inicial: true
-      });
-      st.textContent = ok ? 'Camada adicionada à lista acima.' : 'Essa camada já está na lista.';
-    });
-  }
+  // (v3.3.0) O catálogo de "Outras camadas" e a conexão manual de tabelas foram
+  // retirados da interface a pedido do projeto. A tabela catalogo_camadas pode
+  // continuar no banco; o site apenas não a lê mais.
 
   // =================== 3. UPLOAD E ANÁLISE ============================
   function limparUpload() {
@@ -439,8 +329,7 @@ window.SIGWEB = window.SIGWEB || {};
 
   // =================== 5. LIGAÇÃO =====================================
   NS.ferramentas = {
-    ligar: function () { ligarFiltro(); ligarUpload(); ligarExportacao(); ligarConexaoManual(); },
-    carregarCatalogo: carregarCatalogo,
+    ligar: function () { ligarFiltro(); ligarUpload(); ligarExportacao(); },
     atualizarStatusFiltro: atualizarStatusFiltro
   };
 

@@ -1,5 +1,5 @@
 /* =====================================================================
-   SIGWEB SBN MARICÁ — folha de estilo (v3.2.0)
+   SIGWEB SBN MARICÁ — folha de estilo (v3.3.0)
 
    Tudo o que é cor, medida e fonte está no bloco :root abaixo.
    Trocar um valor ali muda o portal inteiro — ver PERSONALIZAR.md.
@@ -34,6 +34,7 @@
   --cor-ficha: #2b5c8a;             /* branco sobre ele: 7,1:1 */
   --cor-ficha-clara: #e8eef5;
   --cor-ficha-ativa: #1f4a73;
+  --cor-ficha-borda: #8fb0cf;
   --cor-restricao-fundo: #f6c7c7;
   --cor-restricao-titulo: #b01e26;  /* sobre o rosa: 4,9:1 */
 
@@ -279,6 +280,91 @@ body {
 .export-buttons { display: flex; gap: 6px; }
 .export-buttons .btn { margin-top: 0; }
 
+/* ---- Linha de controle + botão ⓘ (v3.3.0) --------------------------
+   As explicações ficam no HTML (leitores de tela as encontram), mas recolhidas:
+   o botão alterna aria-expanded e o atributo hidden do texto. */
+.ctrl-linha { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.ctrl-linha.topo { align-items: flex-start; }
+.ctrl-linha > .checkbox-row { margin-bottom: 0; flex: 1; min-width: 0; }
+.ctrl-linha > label, .ctrl-linha > .rotulo-ferr { flex: 1; font-size: 0.85rem; color: var(--cor-texto); }
+/* Título de seção com ⓘ: a linha divisória passa a ser da linha inteira */
+.ctrl-linha.cab { border-bottom: 1px solid var(--cor-borda); margin: 22px 0 10px 0; padding-bottom: 2px; }
+.ctrl-linha.cab:first-child { margin-top: 0; }
+.ctrl-linha.cab > h3 { flex: 1; border: none; margin: 0; padding: 0; }
+.ctrl-linha + .info-texto, .ctrl-linha { margin-bottom: 8px; }
+.radios { flex: 1; }
+.info-btn {
+  flex-shrink: 0; width: 26px; height: 26px; border-radius: 50%; border: none; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: none; color: var(--cor-texto-fraco); padding: 0;
+}
+.info-btn .icone { width: 18px; height: 18px; }
+.info-btn:hover, .info-btn[aria-expanded="true"] { color: var(--cor-primaria); background: var(--cor-primaria-clara); }
+.info-btn:focus-visible { outline: 2px solid var(--cor-primaria); outline-offset: 1px; }
+.info-texto {
+  font-size: 0.78rem; line-height: 1.5; color: var(--cor-texto-suave);
+  background: var(--cor-fundo); border-left: 3px solid var(--cor-primaria);
+  border-radius: 0 6px 6px 0; padding: 8px 10px; margin: 0 0 10px 0;
+}
+.info-texto kbd { font-family: inherit; font-size: 0.72rem; border: 1px solid var(--cor-borda); border-radius: 3px; padding: 0 4px; background: #fff; }
+
+/* Ferramentas que valem só para a grade do risco climático: caixa ligada ao grupo */
+.ferramentas-camada {
+  border: 1px solid var(--cor-borda); border-radius: var(--raio);
+  padding: 10px 12px 8px 12px; margin: 0 0 12px 0; background: #fbfcfd;
+}
+.ferramentas-camada h4 {
+  margin: 0 0 10px 0; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--cor-texto-suave);
+}
+.ferramentas-camada input[type="range"] { width: 100%; accent-color: var(--cor-primaria); margin: 0 0 12px 0; }
+.ferramentas-camada .control-group { margin-bottom: 4px; }
+.ferramentas-camada .control-group label { font-size: 0.78rem; color: var(--cor-texto-suave); }
+.ferramentas-camada .checkbox-row { margin-bottom: 0; }
+.botoes-linha { display: flex; gap: 6px; }
+.botoes-linha .btn { margin-top: 4px; padding: 7px; }
+
+/* ---- Ferramentas de desenho (medir e relatório) ---------------------- */
+.botoes-ferr { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; margin-bottom: 8px; }
+.botoes-ferr .btn { margin-top: 0; padding: 8px 6px; }
+.btn-ferr { background: #fff; color: var(--cor-texto); border: 1px solid var(--cor-borda); }
+.btn-ferr:hover { background: var(--cor-fundo); }
+.btn-ferr[aria-pressed="true"] { background: var(--cor-primaria); color: var(--cor-sobre-primaria); border-color: var(--cor-primaria); }
+.medidas-lista { display: grid; gap: 6px; margin-bottom: 8px; }
+.medida-item {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 8px;
+  font-size: 0.8rem; padding: 6px 8px; border-radius: 6px; background: var(--cor-fundo);
+}
+.medida-item b { font-variant-numeric: tabular-nums; }
+
+/* Rótulo da medida sobre o mapa (ol.Overlay) */
+.medida-rotulo {
+  background: rgba(30, 42, 56, 0.9); color: #fff; font-size: 0.78rem; font-weight: 600; white-space: nowrap;
+  padding: 3px 8px; border-radius: 4px; pointer-events: none; transform: translateY(-6px);
+  font-variant-numeric: tabular-nums;
+}
+.medida-rotulo.fixo { background: #fff; color: #1e2a38; border: 1px solid #1e2a38; }
+
+/* Barra de instrução enquanto um desenho está ativo (útil no toque: Concluir/Cancelar) */
+#desenho-barra {
+  position: absolute; top: 12px; left: 50%; transform: translateX(-50%); z-index: 30;
+  display: flex; align-items: center; gap: 8px; max-width: calc(100% - 32px);
+  background: rgba(30, 42, 56, 0.94); color: #fff; border-radius: 999px; padding: 6px 6px 6px 14px;
+  font-size: 0.82rem; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+}
+#desenho-barra span { flex: 1; min-width: 0; }
+#desenho-barra button {
+  border: none; border-radius: 999px; padding: 6px 12px; font: inherit; font-weight: 700; cursor: pointer;
+}
+#desenho-concluir { background: #fff; color: #1e2a38; }
+#desenho-cancelar { background: transparent; color: #fff; border: 1px solid rgba(255,255,255,0.5) !important; }
+@media (max-width: 768px) {
+  /* No celular a barra ocupa a largura do mapa: texto numa linha, botões na outra */
+  #desenho-barra { left: 10px; right: 10px; transform: none; max-width: none; border-radius: 12px;
+                   flex-wrap: wrap; padding: 8px 10px; row-gap: 6px; }
+  #desenho-barra span { flex: 1 1 100%; }
+  #desenho-barra button { flex: 1; }
+}
+
 .result-card {
   background: var(--cor-fundo); border: 1px solid var(--cor-borda);
   border-radius: var(--raio); padding: 9px 11px; margin-bottom: 8px; font-size: 0.8rem;
@@ -471,6 +557,11 @@ body {
   box-shadow: 0 -4px 18px rgba(15, 25, 35, 0.14);
   position: relative; z-index: 12;
 }
+/* Com o menu lateral aberto (computador), o painel inferior começa ao lado dele:
+   senão o menu cobriria o canto esquerdo — onde ficam a trilha e os botões. */
+@media (min-width: 769px) {
+  #app.painel-aberto #sbn-painel { margin-left: var(--largura-painel); }
+}
 /* Alça: área de toque de 22 px, com a barrinha desenhada no meio */
 #sbn-alca {
   flex: 0 0 22px; cursor: ns-resize; touch-action: none;
@@ -521,6 +612,7 @@ body {
 .sbn-cartao.marcado { background: var(--cor-ficha-clara); }
 .sbn-cartao .t { font-weight: 700; font-size: 0.98rem; }
 .sbn-cartao .s { font-size: 0.8rem; color: var(--cor-texto-suave); line-height: 1.35; }
+.sbn-cartao.marcado, #sbn-corpo .sbn-cartao:hover { background: var(--cor-ficha-clara); }
 .sbn-cartao .mais { margin-top: auto; font-size: 0.78rem; color: var(--cor-ficha); font-weight: 600; }
 
 .selo {
@@ -533,6 +625,36 @@ body {
 .restricoes .pendente { color: #6b4a4a; }
 .sbn-vazio { padding: 22px; text-align: center; color: var(--cor-texto-suave); font-size: 0.9rem; }
 .sbn-erro { padding: 14px; border-radius: var(--raio); background: #fff4f3; color: #8a1c14; font-size: 0.88rem; }
+
+
+/* ---- Relatório de um local (painel inferior) ------------------------ */
+.relatorio { max-width: 1200px; }
+.rel-acoes { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+.rel-acoes .btn { width: auto; margin: 0; padding: 7px 12px; }
+.rel-cabeca h3 { margin: 0 0 4px 0; font-size: 1.15rem; }
+.rel-cabeca p { margin: 0 0 2px 0; font-size: 0.84rem; color: var(--cor-texto-suave); }
+.rel-grade { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; margin-top: 12px; align-items: start; }
+.rel-bloco { border: 1px solid var(--cor-borda); border-radius: var(--raio); padding: 12px 14px; background: #fff; }
+.rel-bloco h4 { margin: 0 0 8px 0; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--cor-primaria); }
+.rel-bloco p { margin: 0 0 6px 0; font-size: 0.84rem; }
+.rel-destaque { display: flex; flex-direction: column; gap: 4px; }
+.rel-destaque p { color: var(--cor-texto-suave); font-size: 0.8rem; }
+.rel-num { font-size: 1.9rem; font-weight: 800; margin-right: 8px; font-variant-numeric: tabular-nums; vertical-align: middle; }
+.rel-selo { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 0.75rem; font-weight: 700; vertical-align: middle; }
+.rel-sub { font-size: 0.78rem; color: var(--cor-texto-suave); margin: 10px 0 4px 0; }
+.rel-barra { display: flex; height: 12px; border-radius: 3px; overflow: hidden; background: var(--cor-fundo); }
+.rel-barra span { display: block; height: 100%; }
+.rel-tabela { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 0.82rem; }
+.rel-tabela th, .rel-tabela td { text-align: left; padding: 5px 4px; border-bottom: 1px solid #eef1f4; vertical-align: top; font-weight: normal; }
+.rel-tabela thead th { font-weight: 700; color: var(--cor-texto-suave); font-size: 0.75rem; }
+.rel-tabela .n { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.rel-tabela small { color: var(--cor-texto-suave); }
+.rel-tr-barra td { border-bottom: none; padding-top: 0; }
+.rel-radar { position: relative; height: 260px; margin: 4px 0; }
+.rel-tema { display: inline-flex; align-items: center; gap: 5px; border: 1px solid; border-radius: 999px; padding: 1px 8px; font-size: 0.75rem; margin: 1px 0; }
+.rel-tema i { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+.rel-vazio { color: var(--cor-texto-suave); }
+.rel-nota { font-size: 0.76rem; color: var(--cor-texto-suave); line-height: 1.5; margin: 14px 0 0 0; }
 
 /* ---- Ficha ---------------------------------------------------------- */
 .ficha { color: var(--cor-ficha); }
@@ -547,7 +669,8 @@ body {
 }
 .ficha-titulo { flex: 1 1 260px; min-width: 0; }
 .ficha-titulo h3 { margin: 0; font-size: 1.9rem; line-height: 1.1; font-weight: 800; color: var(--cor-ficha); }
-.ficha-titulo .chip-tema {
+.ficha-titulo .chip-tema { background: var(--cor-ficha); color: #fff;
+
   display: inline-block; margin-top: 6px; font-size: 0.78rem; font-weight: 700; color: #fff;
   padding: 2px 10px; border-radius: 999px;
 }
@@ -558,6 +681,8 @@ body {
 .nivel .q i { width: 20px; height: 20px; border-radius: 3px; background: #dcdfe3; display: block; }
 .nivel .q i.on { background: var(--cor-ficha); }
 
+.ficha-corpo.sem-ilustracao { grid-template-columns: minmax(240px, 1fr) minmax(320px, 1.7fr); }
+.ficha-direita.sem-restricoes { grid-template-columns: 1fr; }
 .ficha-corpo { display: grid; grid-template-columns: minmax(220px, 1fr) minmax(240px, 1.15fr) minmax(300px, 1.7fr); gap: 20px; align-items: start; }
 .ficha-col h4 { margin: 14px 0 6px 0; font-size: 0.9rem; font-weight: 800; color: var(--cor-ficha); }
 .ficha-col h4:first-child { margin-top: 0; }
@@ -577,12 +702,12 @@ body {
 .chips.linha { flex-direction: row; flex-wrap: wrap; }
 
 .ficha-ilustra {
-  border: 2px solid #8fb0cf; border-radius: 12px; min-height: 190px; overflow: hidden; background: #f4f8fc;
+  border: 2px solid var(--cor-ficha-borda); border-radius: 12px; min-height: 190px; overflow: hidden; background: var(--cor-ficha-clara);
   display: flex; align-items: center; justify-content: center; text-align: center; color: var(--cor-texto-suave);
   font-size: 0.85rem; padding: 12px;
 }
 .ficha-ilustra img { width: 100%; height: auto; display: block; }
-.ficha-ilustra .icone { width: 42px; height: 42px; margin: 0 auto 8px auto; color: #8fb0cf; }
+.ficha-ilustra .icone { width: 42px; height: 42px; margin: 0 auto 8px auto; color: var(--cor-ficha-borda); }
 
 .ficha-grupo { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
 .ficha-grupo .icone { width: 34px; height: 34px; }
@@ -619,10 +744,10 @@ body {
    cobririam o mapa inteiro. As classes continuam no painel Legenda e as cores dos temas em Camadas. */
 #coluna-mapa.com-sbn #legend-stack { display: none; }
 
-@media (max-width: 1100px) { .ficha-corpo { grid-template-columns: 1fr 1fr; } .ficha-col.direita { grid-column: 1 / -1; } }
+@media (max-width: 1100px) { .ficha-corpo, .ficha-corpo.sem-ilustracao { grid-template-columns: 1fr 1fr; } .ficha-col.direita { grid-column: 1 / -1; } }
 @media (max-width: 768px) {
   #sbn-corpo { padding: 12px 12px 22px 12px; }
-  .ficha-corpo { grid-template-columns: 1fr; }
+  .ficha-corpo, .ficha-corpo.sem-ilustracao { grid-template-columns: 1fr; }
   .ficha-direita { grid-template-columns: 1fr; }
   .ficha-titulo h3 { font-size: 1.5rem; }
   .sbn-grade { grid-template-columns: 1fr; }
