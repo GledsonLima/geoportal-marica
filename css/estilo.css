@@ -1,5 +1,5 @@
 /* =====================================================================
-   SIGWEB SBN MARICÁ — folha de estilo (v3.0.0)
+   SIGWEB SBN MARICÁ — folha de estilo (v3.2.0)
 
    Tudo o que é cor, medida e fonte está no bloco :root abaixo.
    Trocar um valor ali muda o portal inteiro — ver PERSONALIZAR.md.
@@ -28,6 +28,14 @@
   /* Barras dos GRUPOS na janela de detalhes. Os grupos não têm classificação
      publicada no estudo, então saem numa cor neutra, sem sugerir classes. */
   --cor-barra-neutra: #8aa0b4;
+
+  /* ---- Ficha de SbN (painel inferior) --------------------------------
+     Tons do modelo de ficha: azul do título e dos benefícios, rosa das restrições. */
+  --cor-ficha: #2b5c8a;             /* branco sobre ele: 7,1:1 */
+  --cor-ficha-clara: #e8eef5;
+  --cor-ficha-ativa: #1f4a73;
+  --cor-restricao-fundo: #f6c7c7;
+  --cor-restricao-titulo: #b01e26;  /* sobre o rosa: 4,9:1 */
 
   --altura-topbar: 56px;
   --largura-rail: 56px;
@@ -318,7 +326,10 @@ body {
 /* =====================================================================
    4. MAPA E ELEMENTOS SOBRE ELE
    ===================================================================== */
-#map-wrapper { flex: 1; position: relative; min-width: 0; }
+/* A coluna do mapa empilha o mapa e o painel inferior. O painel tem altura
+   definida pelo JavaScript; o mapa ocupa o que sobra (por isso ENCOLHE, não é coberto). */
+#coluna-mapa { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+#map-wrapper { flex: 1; position: relative; min-width: 0; min-height: 0; }
 #map { height: 100%; width: 100%; background: var(--cor-fundo); }
 
 #loading-overlay {
@@ -365,6 +376,7 @@ body {
 .legend-row.clicavel:hover { background: var(--cor-fundo); }
 .legend-row.desligada { opacity: 0.35; text-decoration: line-through; }
 .swatch { width: 14px; height: 14px; border-radius: 3px; flex-shrink: 0; border: 1px solid rgba(0, 0, 0, 0.2); }
+.swatch-linha { width: 18px; height: 5px; border-radius: 3px; flex-shrink: 0; }
 .swatch-line { width: 18px; height: 0; border-top: 3px solid var(--cor-texto); flex-shrink: 0; }
 .legend-label { flex: 1; }
 .legend-range { color: var(--cor-texto-suave); font-size: 0.72rem; white-space: nowrap; }
@@ -437,6 +449,185 @@ body {
 .dash-loading.erro { color: #b3261e; }
 .dash-radar-section { margin-top: 22px; }
 .dash-radar-wrap { position: relative; height: 320px; }
+
+
+/* =====================================================================
+   5. ÁREAS PRIORITÁRIAS — chaves por tema no painel Camadas
+   ===================================================================== */
+.temas-lista { margin: 2px 0 6px 0; }
+.tema-linha { display: flex; align-items: center; gap: 8px; padding: 4px 0 4px 4px; font-size: 0.88rem; }
+.tema-linha input { margin: 0; flex-shrink: 0; accent-color: var(--cor-primaria); }
+.tema-linha label { flex: 1; cursor: pointer; display: flex; align-items: center; gap: 8px; }
+.tema-cor { width: 16px; height: 6px; border-radius: 3px; flex-shrink: 0; }
+.tema-n { color: var(--cor-texto-suave); font-size: 0.75rem; }
+
+/* =====================================================================
+   5b. PAINEL INFERIOR: ÁREA -> TEMA -> SBN -> FICHA
+   ===================================================================== */
+#sbn-painel {
+  flex: 0 0 auto; height: 50%;
+  display: flex; flex-direction: column; min-height: 0;
+  background: var(--cor-painel); border-top: 1px solid var(--cor-borda);
+  box-shadow: 0 -4px 18px rgba(15, 25, 35, 0.14);
+  position: relative; z-index: 12;
+}
+/* Alça: área de toque de 22 px, com a barrinha desenhada no meio */
+#sbn-alca {
+  flex: 0 0 22px; cursor: ns-resize; touch-action: none;
+  display: flex; align-items: center; justify-content: center;
+}
+#sbn-alca span { width: 54px; height: 5px; border-radius: 3px; background: #c5cfd9; }
+#sbn-alca:hover span, #sbn-alca:focus-visible span { background: var(--cor-primaria); }
+#sbn-painel.arrastando { user-select: none; }
+
+#sbn-topo {
+  flex: 0 0 auto; display: flex; align-items: center; gap: 10px;
+  padding: 0 12px 8px 12px; border-bottom: 1px solid var(--cor-borda);
+}
+.sbn-btn-icone {
+  display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0;
+  background: none; border: 1px solid var(--cor-borda); color: var(--cor-texto);
+  border-radius: 6px; padding: 5px 9px; font: inherit; font-size: 0.82rem; cursor: pointer;
+}
+.sbn-btn-icone:hover { background: var(--cor-fundo); }
+.sbn-btn-icone .icone { width: 16px; height: 16px; }
+#sbn-fechar { margin-left: auto; padding: 5px 7px; }
+
+/* Trilha: Área 14 › Águas Urbanas › Jardim filtrante */
+#sbn-trilha { display: flex; align-items: center; flex-wrap: wrap; gap: 2px; min-width: 0; font-size: 0.85rem; }
+#sbn-trilha button {
+  background: none; border: none; padding: 3px 5px; border-radius: 5px; font: inherit;
+  color: var(--cor-ficha); cursor: pointer; text-decoration: underline; text-underline-offset: 2px;
+}
+#sbn-trilha button:hover { background: var(--cor-ficha-clara); }
+#sbn-trilha .atual { padding: 3px 5px; font-weight: 700; color: var(--cor-texto); }
+#sbn-trilha .sep { width: 14px; height: 14px; color: var(--cor-texto-fraco); flex-shrink: 0; }
+
+#sbn-corpo { flex: 1; min-height: 0; overflow: auto; padding: 14px 16px 22px 16px; outline: none; }
+.sbn-cabeca { margin: 0 0 12px 0; }
+.sbn-cabeca h3 { margin: 0 0 2px 0; font-size: 1.15rem; }
+.sbn-cabeca p { margin: 0; font-size: 0.84rem; color: var(--cor-texto-suave); }
+.sbn-instrucao { margin: 0 0 12px 0; font-size: 0.9rem; color: var(--cor-texto-suave); }
+
+.sbn-grade { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; }
+.sbn-cartao {
+  position: relative; text-align: left; font: inherit; cursor: pointer;
+  background: #ffffff; border: 1px solid var(--cor-borda); border-left-width: 6px;
+  border-radius: var(--raio); padding: 12px 14px; color: var(--cor-texto);
+  display: flex; flex-direction: column; gap: 6px; min-height: 92px;
+  transition: box-shadow 0.15s ease-out, transform 0.15s ease-out;
+}
+.sbn-cartao:hover { box-shadow: 0 4px 14px rgba(15, 25, 35, 0.16); transform: translateY(-1px); }
+.sbn-cartao.marcado { background: var(--cor-ficha-clara); }
+.sbn-cartao .t { font-weight: 700; font-size: 0.98rem; }
+.sbn-cartao .s { font-size: 0.8rem; color: var(--cor-texto-suave); line-height: 1.35; }
+.sbn-cartao .mais { margin-top: auto; font-size: 0.78rem; color: var(--cor-ficha); font-weight: 600; }
+
+.selo {
+  display: inline-block; width: fit-content; font-size: 0.7rem; font-weight: 700; letter-spacing: 0.02em;
+  padding: 2px 8px; border-radius: 999px; background: #fff0d1; color: #7a4a00; border: 1px solid #f0cf86;
+}
+.selo.ok { background: #e0f2e6; color: #1d5b32; border-color: #a7d7b5; }
+
+.pendente { font-style: italic; color: var(--cor-texto-suave); }
+.restricoes .pendente { color: #6b4a4a; }
+.sbn-vazio { padding: 22px; text-align: center; color: var(--cor-texto-suave); font-size: 0.9rem; }
+.sbn-erro { padding: 14px; border-radius: var(--raio); background: #fff4f3; color: #8a1c14; font-size: 0.88rem; }
+
+/* ---- Ficha ---------------------------------------------------------- */
+.ficha { color: var(--cor-ficha); }
+.ficha-aviso {
+  display: flex; gap: 10px; align-items: flex-start; margin-bottom: 14px; padding: 10px 14px;
+  background: #fff6e5; border: 1px solid #f0d49a; color: #6b4608; border-radius: var(--raio); font-size: 0.85rem;
+}
+.ficha-topo { display: flex; align-items: flex-start; gap: 14px; margin-bottom: 14px; flex-wrap: wrap; }
+.ficha-num {
+  flex: 0 0 auto; min-width: 54px; height: 54px; display: flex; align-items: center; justify-content: center;
+  background: var(--cor-ficha); color: #fff; font-size: 2rem; font-weight: 800; border-radius: 6px 0 6px 0; padding: 0 8px;
+}
+.ficha-titulo { flex: 1 1 260px; min-width: 0; }
+.ficha-titulo h3 { margin: 0; font-size: 1.9rem; line-height: 1.1; font-weight: 800; color: var(--cor-ficha); }
+.ficha-titulo .chip-tema {
+  display: inline-block; margin-top: 6px; font-size: 0.78rem; font-weight: 700; color: #fff;
+  padding: 2px 10px; border-radius: 999px;
+}
+.ficha-niveis { flex: 0 0 auto; display: grid; gap: 6px; font-size: 0.78rem; color: var(--cor-texto-suave); }
+.nivel { display: flex; align-items: center; gap: 8px; }
+.nivel .rot { width: 86px; }
+.nivel .q { display: flex; gap: 4px; }
+.nivel .q i { width: 20px; height: 20px; border-radius: 3px; background: #dcdfe3; display: block; }
+.nivel .q i.on { background: var(--cor-ficha); }
+
+.ficha-corpo { display: grid; grid-template-columns: minmax(220px, 1fr) minmax(240px, 1.15fr) minmax(300px, 1.7fr); gap: 20px; align-items: start; }
+.ficha-col h4 { margin: 14px 0 6px 0; font-size: 0.9rem; font-weight: 800; color: var(--cor-ficha); }
+.ficha-col h4:first-child { margin-top: 0; }
+.ficha-col p { margin: 0 0 6px 0; font-size: 0.86rem; line-height: 1.5; color: #2c3a47; }
+.ficha-custo {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 10px; font-weight: 800; font-size: 0.95rem; color: var(--cor-ficha);
+}
+.ficha-custo .moeda {
+  width: 22px; height: 22px; border: 2px solid var(--cor-ficha); border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center; font-size: 0.72rem; flex-shrink: 0;
+}
+.chips { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+.chip {
+  border: 1.5px solid var(--cor-ficha); color: var(--cor-ficha); font-weight: 700; font-size: 0.8rem;
+  padding: 3px 9px; border-radius: 3px; background: #fff;
+}
+.chips.linha { flex-direction: row; flex-wrap: wrap; }
+
+.ficha-ilustra {
+  border: 2px solid #8fb0cf; border-radius: 12px; min-height: 190px; overflow: hidden; background: #f4f8fc;
+  display: flex; align-items: center; justify-content: center; text-align: center; color: var(--cor-texto-suave);
+  font-size: 0.85rem; padding: 12px;
+}
+.ficha-ilustra img { width: 100%; height: auto; display: block; }
+.ficha-ilustra .icone { width: 42px; height: 42px; margin: 0 auto 8px auto; color: #8fb0cf; }
+
+.ficha-grupo { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+.ficha-grupo .icone { width: 34px; height: 34px; }
+.ficha-grupo h4 { margin: 0; font-size: 1.05rem; }
+.ficha-direita { display: grid; grid-template-columns: minmax(0, 1fr) minmax(130px, 0.34fr); gap: 14px; align-items: start; }
+.funcoes { display: grid; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap: 8px; }
+.funcao {
+  display: flex; align-items: center; gap: 6px; padding: 6px 7px; border-radius: 4px; min-height: 44px;
+  font-size: 0.7rem; line-height: 1.2; color: #8a97a5; border: 2px solid transparent;
+}
+.funcao .icone { width: 18px; height: 18px; opacity: 0.55; }
+/* Função ativa: contorno e texto escuros. Não depende só de cor: o contorno e o
+   peso da fonte também mudam, e o leitor de tela recebe "indicada". */
+.funcao.on { color: var(--cor-ficha-ativa); border-color: var(--cor-ficha); font-weight: 800; background: #fff; }
+.funcao.on .icone { opacity: 1; }
+.restricoes {
+  background: var(--cor-restricao-fundo); border-radius: 8px; padding: 12px; text-align: center; font-size: 0.82rem; color: #3a2a2a;
+}
+.restricoes h4 { margin: 0 0 8px 0; font-size: 1rem; color: var(--cor-restricao-titulo); line-height: 1.2; }
+
+.beneficios { margin-top: 18px; position: relative; background: var(--cor-ficha); color: #fff; border-radius: 8px; padding: 26px 14px 14px 14px; }
+.beneficios > h4 {
+  position: absolute; top: -13px; left: 50%; transform: translateX(-50%); margin: 0;
+  background: var(--cor-painel); color: var(--cor-ficha); padding: 2px 16px; border-radius: 0 0 10px 10px; font-size: 1rem;
+}
+.beneficios-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 14px; }
+.beneficios h5 { margin: 0 0 6px 0; font-size: 0.88rem; text-align: center; }
+.beneficios p { margin: 0; font-size: 0.8rem; line-height: 1.45; text-align: center; color: #fff; }
+
+.ficha-rodape { margin-top: 16px; display: grid; gap: 6px; font-size: 0.8rem; color: var(--cor-texto-suave); }
+.ficha-rodape b { color: var(--cor-ficha); }
+
+/* Com o painel aberto o mapa fica com ~metade da altura: as legendas (que somam quase 400 px)
+   cobririam o mapa inteiro. As classes continuam no painel Legenda e as cores dos temas em Camadas. */
+#coluna-mapa.com-sbn #legend-stack { display: none; }
+
+@media (max-width: 1100px) { .ficha-corpo { grid-template-columns: 1fr 1fr; } .ficha-col.direita { grid-column: 1 / -1; } }
+@media (max-width: 768px) {
+  #sbn-corpo { padding: 12px 12px 22px 12px; }
+  .ficha-corpo { grid-template-columns: 1fr; }
+  .ficha-direita { grid-template-columns: 1fr; }
+  .ficha-titulo h3 { font-size: 1.5rem; }
+  .sbn-grade { grid-template-columns: 1fr; }
+  .sbn-btn-icone span { display: none; }   /* no celular o botão Voltar vira só a seta */
+}
 
 /* =====================================================================
    6. CELULAR E TABLET

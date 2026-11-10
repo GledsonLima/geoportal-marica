@@ -453,7 +453,21 @@ window.SIGWEB = window.SIGWEB || {};
       return;
     }
 
-    // 2º: grade hexagonal (só se visível e se a célula passa no filtro)
+    // 2º: áreas prioritárias -> abre o painel inferior (Área > Tema > SbN > Ficha)
+    if (M.areasLayer.getVisible()) {
+      var area = null;
+      M.map.forEachFeatureAtPixel(evt.pixel, function (f) { area = f; return true; }, {
+        hitTolerance: 3,
+        layerFilter: function (l) { return l === M.areasLayer; }
+      });
+      if (area && NS.fichas) {
+        fecharDashboard(); fecharInfo();
+        NS.fichas.abrirArea(area.get('num_area'));
+        return;
+      }
+    }
+
+    // 3º: grade hexagonal (só se visível e se a célula passa no filtro)
     if (!M.hexLayer.getVisible()) return;
     var cand = M.hexSource.getFeaturesAtCoordinate(evt.coordinate)
       .filter(function (f) { return M.passaFiltro(M.valorAtivo(f)); });
@@ -482,7 +496,7 @@ window.SIGWEB = window.SIGWEB || {};
   M.map.on('pointermove', function (evt) {
     if (evt.dragging) return;
     var hit = M.map.hasFeatureAtPixel(evt.pixel, {
-      layerFilter: function (l) { return l === M.hexLayer || l === M.uploadedLayer || l.get('catalogo') === true; }
+      layerFilter: function (l) { return l === M.hexLayer || l === M.areasLayer || l === M.uploadedLayer || l.get('catalogo') === true; }
     });
     M.map.getTargetElement().style.cursor = hit ? 'pointer' : '';
   });
@@ -493,7 +507,8 @@ window.SIGWEB = window.SIGWEB || {};
     if (dashboardOverlay.style.display === 'flex') { fecharDashboard(); return; }
     if (!$('info-panel').hidden) { fecharInfo(); return; }
     if (!listaSug.hidden) { fecharSugestoes(); return; }
-    if (painelAtual) fecharPainel();
+    if (painelAtual) { fecharPainel(); return; }
+    if (NS.fichas && NS.fichas.aberto()) NS.fichas.fechar();
   });
 
   // =================== 10. CONTROLES DAS CAMADAS ======================
@@ -525,6 +540,16 @@ window.SIGWEB = window.SIGWEB || {};
     $('toggle-paleta').addEventListener('change', function (e) {
       M.setPaletaAcessivel(e.target.checked);
     });
+    // Áreas prioritárias: chave geral + uma por tema (criadas em montarTemas)
+    $('toggle-areas').addEventListener('change', function (e) {
+      M.setAreasVisiveis(e.target.checked);
+      document.querySelectorAll('#temas-lista input').forEach(function (i) { i.disabled = !e.target.checked; });
+      $('toggle-areas-rotulos').disabled = !e.target.checked;
+      if (!e.target.checked && NS.fichas) NS.fichas.fechar();
+    });
+    $('toggle-areas-rotulos').addEventListener('change', function (e) {
+      M.setRotulosAreas(e.target.checked);
+    });
     $('toggle-radar').addEventListener('change', function () {
       if (!$('toggle-radar').checked) fecharDashboard(); else fecharInfo();
     });
@@ -543,6 +568,28 @@ window.SIGWEB = window.SIGWEB || {};
     $('indice-aviso').hidden = ok;
   }
 
+  /** Uma caixa por tema, com a cor e o número de áreas. Chamado depois da carga. */
+  function montarTemas() {
+    var lista = $('temas-lista'), cont = M.contagemPorTema();
+    lista.innerHTML = M.temas().map(function (t) {
+      return '<div class="tema-linha"><input type="checkbox" id="tema-' + esc(t.id) + '" data-tema="' + esc(t.id) + '" checked>' +
+        '<label for="tema-' + esc(t.id) + '"><span class="tema-cor" style="background:' + esc(t.cor) + '"></span>' +
+        '<span>' + esc(t.nome_curto) + '</span><span class="tema-n">(' + (cont[t.id] || 0) + ((cont[t.id] || 0) === 1 ? ' área' : ' áreas') + ')</span></label></div>';
+    }).join('');
+    lista.querySelectorAll('input').forEach(function (i) {
+      i.addEventListener('change', function () { M.setTemaVisivel(Number(i.dataset.tema), i.checked); });
+    });
+    M.montarLegendaAreas();
+  }
+
+  /** O script 06 ainda não rodou (ou a view não está publicada): explica em vez de falhar calado. */
+  function areasIndisponiveis() {
+    $('toggle-areas').checked = false; $('toggle-areas').disabled = true;
+    $('toggle-areas-rotulos').disabled = true;
+    $('areas-aviso').hidden = false; $('areas-dica').hidden = true;
+    M.setAreasVisiveis(false);
+  }
+
   // Mantém o rótulo do filtro em dia quando a camada muda.
   NS.aoTrocarIndice = function () {
     if (NS.atualizarRotuloFiltro) NS.atualizarRotuloFiltro();
@@ -555,6 +602,7 @@ window.SIGWEB = window.SIGWEB || {};
   NS.painel = {
     ligar: function () { montarSeletorMapaBase(); ligarControlesCamadas(); },
     atualizarDisponibilidade: atualizarDisponibilidade,
+    montarTemas: montarTemas, areasIndisponiveis: areasIndisponiveis,
     abrirPainel: abrirPainel, fecharPainel: fecharPainel,
     abrirDashboard: abrirDashboard
   };

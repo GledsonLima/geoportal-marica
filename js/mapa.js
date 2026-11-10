@@ -264,6 +264,12 @@ window.SIGWEB = window.SIGWEB || {};
     source: distritosSource, opacity: 0.7, style: estiloDistrito, zIndex: 20, declutter: true
   });
 
+  // Áreas prioritárias (60 polígonos): ficam entre a grade e os limites distritais.
+  var areasSource = new ol.source.Vector({ wrapX: false });
+  var areasLayer = new ol.layer.Vector({
+    source: areasSource, style: estiloArea, zIndex: 25, declutter: true
+  });
+
   var uploadedSource = new ol.source.Vector();
   var uploadedLayer = new ol.layer.Vector({
     source: uploadedSource, zIndex: 40,
@@ -277,7 +283,7 @@ window.SIGWEB = window.SIGWEB || {};
 
   var map = new ol.Map({
     target: 'map',
-    layers: BASEMAPS.map(function (d) { return d.layer; }).concat([hexLayer, distritosLayer, uploadedLayer]),
+    layers: BASEMAPS.map(function (d) { return d.layer; }).concat([hexLayer, areasLayer, distritosLayer, uploadedLayer]),
     view: new ol.View({
       center: ol.proj.fromLonLat(CFG.CENTRO_INICIAL || [-42.82, -22.92]),
       zoom: CFG.ZOOM_INICIAL || 11, maxZoom: 19
@@ -545,7 +551,150 @@ window.SIGWEB = window.SIGWEB || {};
     return feats.length;
   }
 
-  // =================== 7. EXPOSIÇÃO DO MÓDULO =========================
+  // =================== 7. ÁREAS PRIORITÁRIAS ==========================
+  /*  Cada área tem um vetor `temas` (N:N com os 5 temas estratégicos). A camada
+      é UMA só no OpenLayers, mas se comporta como uma subcamada por tema: cada
+      tema tem a sua chave e a sua cor, e a área aparece enquanto ao menos um
+      dos seus temas estiver ligado. Se tiver mais de um tema ligado, o contorno
+      sai em FAIXAS concêntricas, uma cor por tema — assim nenhuma cor esconde a
+      outra e o mapa continua legível sem sobrepor camadas.                      */
+  var TEMAS_PADRAO = [   // usado só se a tabela tema_estrategico não puder ser lida
+    { id: 1, nome: 'Águas Urbanas',        nome_curto: 'Águas Urbanas',        cor: '#1f78b4' },
+    { id: 2, nome: 'Terreno e Erosão',     nome_curto: 'Terreno e Erosão',     cor: '#d95f02' },
+    { id: 3, nome: 'Costeira e Lagunar',   nome_curto: 'Costeira e Lagunar',   cor: '#00a0b0' },
+    { id: 4, nome: 'Infraestrutura Verde', nome_curto: 'Infraestrutura Verde', cor: '#66a61e' },
+    { id: 5, nome: 'Saneamento Ecológico', nome_curto: 'Saneamento Ecológico', cor: '#7570b3' }
+  ];
+  var temas = [];
+  var temasVisiveis = new Set();
+  var rotulosAreas = true;
+  var areaSelecionada = null;
+  var ESTILOS_AREA = new Map();    // cache por combinação de temas ligados
+
+  function temaPorId(id) {
+    for (var i = 0; i < temas.length; i++) if (temas[i].id === id) return temas[i];
+    return null;
+  }
+  function corDoTema(id) { var t = temaPorId(id); return t ? t.cor : '#555555'; }
+
+  function rgba(hex, a) {
+    return 'rgba(' + parseInt(hex.substr(1, 2), 16) + ',' + parseInt(hex.substr(3, 2), 16) + ',' +
+           parseInt(hex.substr(5, 2), 16) + ',' + a + ')';
+  }
+
+  /** Estilos do polígono (sem rótulo) para uma lista de temas ligados. */
+  function estilosDoPoligono(ids) {
+    var chave = ids.join(',');
+    if (ESTILOS_AREA.has(chave)) return ESTILOS_AREA.get(chave);
+    var n = ids.length, st = [];
+    // Preenchimento leve (a grade de risco continua visível por baixo)
+    st.push(new ol.style.Style({ fill: new ol.style.Fill({ color: rgba(corDoTema(ids[0]), 0.16) }) }));
+    // Halo branco: separa o contorno colorido do mapa de fundo e da grade
+    st.push(new ol.style.Style({ stroke: new ol.style.Stroke({ color: 'rgba(255,255,255,0.95)', width: n * 2.4 + 3.4 }) }));
+    // Faixas: a primeira é a mais larga (fica por baixo), a última a mais fina
+    ids.forEach(function (id, k) {
+      st.push(new ol.style.Style({ stroke: new ol.style.Stroke({ color: corDoTema(id), width: (n - k) * 2.4 + 0.8 }) }));
+    });
+    ESTILOS_AREA.set(chave, st);
+    return st;
+  }
+
+  var ESTILO_SELECAO = new ol.style.Style({
+    stroke: new ol.style.Stroke({ color: '#111827', width: 3.2, lineDash: [9, 6] }),
+    fill: new ol.style.Fill({ color: 'rgba(17,24,39,0.10)' })
+  });
+
+  function estiloArea(feature) {
+    var ids = (feature.get('temas') || []).filter(function (t) { return temasVisiveis.has(t); });
+    if (!ids.length) return null;
+    var st = estilosDoPoligono(ids);
+    var num = feature.get('num_area');
+    var extra = [];
+    if (areaSelecionada !== null && num === areaSelecionada) extra.push(ESTILO_SELECAO);
+    if (rotulosAreas) {
+      extra.push(new ol.style.Style({
+        geometry: pontoRotulo,
+        text: new ol.style.Text({
+          text: String(num),
+          font: 'bold 13px "Segoe UI", Arial, sans-serif',
+          fill: new ol.style.Fill({ color: '#1f2933' }),
+          stroke: new ol.style.Stroke({ color: '#ffffff', width: 4 }),
+          overflow: true
+        })
+      }));
+    }
+    return extra.length ? st.concat(extra) : st;
+  }
+
+  async function carregarTemas() {
+    try {
+      var r = await NS.api.get((CFG.TABELA_TEMAS || 'tema_estrategico') +
+        '?select=id,nome,nome_curto,cor,ordem&order=ordem.asc');
+      if (Array.isArray(r) && r.length) return r;
+    } catch (e) { console.warn('[mapa] temas: usando a lista padrão —', e.message); }
+    return TEMAS_PADRAO;
+  }
+
+  /** Lê as 60 áreas (GeoJSON em 4326) e os temas. Devolve o número de áreas. */
+  async function carregarAreas() {
+    var res = await Promise.all([
+      NS.api.get((CFG.VIEW_AREAS || 'vw_areas_prioritarias') + '?select=*&order=num_area.asc', { geojson: true }),
+      carregarTemas()
+    ]);
+    temas = res[1].map(function (t) {
+      return { id: Number(t.id), nome: t.nome, nome_curto: t.nome_curto || t.nome, cor: t.cor || '#555555' };
+    });
+    // Mesmo objeto Set (não reatribuir): NS.mapa.temasVisiveis aponta para ele.
+    temasVisiveis.clear();
+    temas.forEach(function (t) { temasVisiveis.add(t.id); });
+    var feats = new ol.format.GeoJSON().readFeatures(res[0], {
+      dataProjection: 'EPSG:4326', featureProjection: 'EPSG:3857'
+    });
+    feats.forEach(function (f) {
+      var n = Number(f.get('num_area'));
+      f.set('num_area', n, true);
+      f.set('temas', (f.get('temas') || []).map(Number), true);
+      f.setId(n);
+    });
+    areasSource.addFeatures(feats);
+    return feats.length;
+  }
+
+  function areaPorNum(n) { return areasSource.getFeatureById(Number(n)); }
+
+  /** Quantas áreas têm cada tema (para o painel de camadas). */
+  function contagemPorTema() {
+    var c = {};
+    areasSource.getFeatures().forEach(function (f) {
+      (f.get('temas') || []).forEach(function (t) { c[t] = (c[t] || 0) + 1; });
+    });
+    return c;
+  }
+
+  function montarLegendaAreas() {
+    var el = $('areas-legend-rows');
+    if (!el) return;
+    el.innerHTML = temas.filter(function (t) { return temasVisiveis.has(t.id); }).map(function (t) {
+      return '<div class="legend-row"><span class="swatch-linha" style="background:' + esc(t.cor) + ';"></span>' +
+             '<span class="legend-label">' + esc(t.nome_curto) + '</span></div>';
+    }).join('');
+    var caixa = $('areas-legend');
+    if (caixa) caixa.hidden = !areasLayer.getVisible() || !temasVisiveis.size;
+  }
+
+  function setTemaVisivel(id, v) {
+    if (v) temasVisiveis.add(id); else temasVisiveis.delete(id);
+    areasLayer.changed();
+    montarLegendaAreas();
+  }
+  function setAreasVisiveis(v) { areasLayer.setVisible(!!v); montarLegendaAreas(); }
+  function setRotulosAreas(v) { rotulosAreas = !!v; areasLayer.changed(); }
+  function selecionarArea(n) {
+    areaSelecionada = (n === null || n === undefined) ? null : Number(n);
+    areasLayer.changed();
+  }
+
+  // =================== 8. EXPOSIÇÃO DO MÓDULO =========================
   NS.mapa = {
     map: map,
     BASEMAPS: BASEMAPS,
@@ -592,6 +741,19 @@ window.SIGWEB = window.SIGWEB || {};
     passaFiltro: passaFiltro,
     redesenharLegendas: redesenharLegendas,
     setRotulosDistritos: function (v) { mostrarRotulos = v; distritosLayer.changed(); },
+
+    areasSource: areasSource, areasLayer: areasLayer,
+    carregarAreas: carregarAreas,
+    temas: function () { return temas; },
+    temaPorId: temaPorId,
+    temasVisiveis: temasVisiveis,
+    areaPorNum: areaPorNum,
+    contagemPorTema: contagemPorTema,
+    setTemaVisivel: setTemaVisivel,
+    setAreasVisiveis: setAreasVisiveis,
+    setRotulosAreas: setRotulosAreas,
+    selecionarArea: selecionarArea,
+    montarLegendaAreas: montarLegendaAreas,
     resolucaoH3: H3_RES
   };
 

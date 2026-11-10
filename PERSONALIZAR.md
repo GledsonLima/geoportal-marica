@@ -10,6 +10,7 @@ arquivo → *Commit changes* → o site se atualiza em ~1 minuto).
 | `js/config.js` | **Conexão** com o banco, caixa do município, chave da CARTO |
 | `js/mapa.js` | Mapas base, cores do risco, estilo dos distritos |
 | `js/painel.js` | Comportamento da barra superior, busca, painéis e janela de detalhes |
+| `js/fichas.js` | Painel inferior: Área → Tema → lista de SbN → ficha (altura, arraste, modelo da ficha) |
 | `js/ferramentas.js` | Filtro, upload, exportação e catálogo de camadas |
 | `js/util.js`, `js/api.js`, `js/app.js` | Apoio, conversa com o banco e inicialização |
 
@@ -118,3 +119,16 @@ dados, ou múltiplas páginas em torno do mapa.
   Se acrescentar animações, inclua-as na regra `@media (prefers-reduced-motion: reduce)`.
 - **Celular:** teste sempre no telefone (ou F12 → ícone de celular no navegador).
 - **Logos:** use arquivos leves (< 100 KB) e preencha o texto alternativo (`alt`).
+
+## Áreas prioritárias e fichas (v3.2.0)
+
+**Cores dos temas** — vêm da tabela `tema_estrategico` (coluna `cor`). Mude no Table Editor do
+Supabase; o site não precisa ser republicado. `TEMAS_PADRAO`, em `js/mapa.js`, só vale se a tabela
+não puder ser lida.
+
+**Altura do painel inferior** — em `js/fichas.js`: `FRACAO_MIN`, `FRACAO_MAX`, `FRACAO_MAX_CELULAR`,
+`FRACAO_INICIAL` e `LIMIAR_FECHAR` (fração da altura da coluna do mapa).
+
+**Aparência da ficha** — em `css/estilo.css`: variáveis `--cor-ficha*` e `--cor-restricao-*` (bloco
+`:root`) e as classes `.ficha-*`. O conteúdo vem de `rpc/ficha_sbn`; a estrutura está na função
+`fichaHTML`, em `js/fichas.js`.

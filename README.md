@@ -3,7 +3,7 @@
 > Antes chamado "Geoportal — Mapeamento de Risco Climático de Maricá-RJ".
 > A v3.0.0 traz a identidade SIGWEB SBN Maricá: barra superior com logo e busca,
 > faixa vertical de ícones com painéis, novos mapas base e o código dividido por assunto.
-> As Etapas 2 a 5 (camadas do índice, áreas prioritárias e fichas de SbN) virão em seguida.
+> A v3.2.0 inclui as quatro camadas do índice, as áreas prioritárias e as fichas de SbN (Passos 7 e 8).
 
 
 Versão em nuvem do geoportal: **banco e API no Supabase** + **site estático no GitHub Pages**.
@@ -238,6 +238,48 @@ Soluções por tema: 1 = 14, 2 = 13, 3 = 6, 4 = 6, 5 = 4.
 > `areas_prioritarias`. O script 06 continua necessário para temas, vínculos e SbN.
 
 ---
+
+## Passo 8 — Áreas Prioritárias e fichas de SbN (v3.2.0)
+
+Pré-requisito: o script `supabase/06_areas_prioritarias_e_sbn.sql` já rodou (Passo 7.2).
+**Não há mais nada a subir no banco** — esta versão só traz arquivos do site.
+
+**O que o visitante vê**
+1. Painel **Camadas → Áreas Prioritárias por Temática**: uma chave geral, uma chave por tema
+   (com cor e número de áreas) e a chave dos rótulos (número da área).
+2. Uma área com mais de um tema aparece em cada tema ligado. O contorno sai em **faixas**,
+   uma cor por tema, em vez de camadas empilhadas que escondem umas às outras.
+3. **Clique numa área** → abre o painel inferior e o mapa **encolhe** (não é coberto) e se
+   reenquadra na área. Fluxo: **Área → Tema → lista de SbN → ficha**. Área com um só tema
+   vai direto à lista. Há trilha de navegação e botão Voltar.
+4. O painel abre com 50% da altura; a alça no topo ajusta entre 30% e 60% (70% no celular), com
+   mouse, toque ou setas do teclado. Fecha com o X, com `Esc` ou arrastando a alça até embaixo.
+5. A ficha tem **um único modelo**. Campo sem texto aparece como "Em elaboração"; solução com
+   status diferente de "Concluído" ganha o aviso "Ficha em elaboração"; sem ilustração, aparece
+   o espaço reservado.
+
+**Como o site conversa com o banco** (cada passo é uma consulta pequena, com cache)
+
+| Ação | Chamada | Parâmetro |
+|---|---|---|
+| Carga das áreas | `vw_areas_prioritarias` (GeoJSON, EPSG:4326) | — |
+| Cores dos temas | `tema_estrategico` | — |
+| Clique na área | `rpc/temas_da_area` | `p_num_area` (smallint) |
+| Escolha do tema | `rpc/sbn_do_tema` | `p_tema` (smallint) |
+| Escolha da solução | `rpc/ficha_sbn` | `p_slug` (text) |
+| Grade de 20 funções | `rpc/sbn_funcoes` | — |
+
+Os parâmetros são **tipados no banco**, o equivalente a uma consulta parametrizada: o valor nunca
+vira texto de SQL. No navegador, o número passa por `Number.isInteger` e o slug por uma expressão
+regular antes de entrar na URL.
+
+**Para alimentar uma ficha** basta editar a linha da solução na tabela `sbn_solucao` (Table Editor
+do Supabase): preencha os campos e mude `status_conteudo` para `Concluído`. Para mostrar uma
+ilustração, preencha `ilustracao_url` com um endereço `https://…` ou com um caminho `img/…` de
+um arquivo enviado ao repositório. Nada precisa ser republicado no site.
+
+**Observação de uso:** com a camada de áreas ligada, o clique dentro de uma área abre o painel
+inferior. Para ver o radar de um hexágono, clique fora das áreas ou desligue a camada.
 
 ## Atualizar o site depois de receber uma versão nova
 

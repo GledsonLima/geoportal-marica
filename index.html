@@ -7,7 +7,7 @@
   <!--
   ======================================================================
   SIGWEB SBN MARICÁ — frontend estático
-  VERSÃO: v3.1.0 — Etapas 1 e 2 (interface + as quatro camadas do índice)
+  VERSÃO: v3.2.0 — Etapas 1 a 3 (interface, camadas do índice, áreas prioritárias e fichas de SbN)
 
   Dados: PostgreSQL/PostGIS + API REST (PostgREST), chave pública + RLS somente leitura
   Hospedagem: GitHub Pages (arquivos estáticos, sem servidor próprio)
@@ -26,9 +26,15 @@
     mapa.js        mapa, mapas base, grade hexagonal, distritos, legenda
     ferramentas.js filtro, upload, exportação e outras camadas
     painel.js      barra superior, busca, faixa de ícones, painéis, janela de detalhes
+    fichas.js      painel inferior: Área -> Tema -> lista de SbN -> ficha
     app.js         inicialização e ligação entre as partes
 
   CHANGELOG
+  v3.2.0 Camada "Áreas Prioritárias por Temática" (60 áreas, uma subcamada por tema,
+         rótulos com o número da área) e painel inferior Área -> Tema -> SbN -> Ficha,
+         em que o mapa encolhe em vez de ficar coberto. Fichas lidas do banco.
+  v3.1.0 Quatro camadas do índice (final + Ameaça, Exposição, Vulnerabilidade), cada
+         uma com as quebras (Jenks) e as cores do estudo; paleta acessível opcional.
   v3.0.0 Identidade SIGWEB SBN Maricá: barra superior fixa com logo e busca com
          autocompletar; faixa vertical de ícones com painéis recolhíveis; mapas base
          trocados (a CARTO passou a exigir chave e devolvia tiles com marca d'água) e
@@ -41,7 +47,7 @@
   <title>SIGWEB SBN Maricá</title>
   <link rel="icon" href="img/logo-marica.png">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@9.2.4/ol.css">
-  <link rel="stylesheet" href="css/estilo.css?v=3.1.0">
+  <link rel="stylesheet" href="css/estilo.css?v=3.2.0">
 </head>
 <body>
 
@@ -72,6 +78,15 @@
   </symbol>
   <symbol id="i-busca" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
     <circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>
+  </symbol>
+  <symbol id="i-folha" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M7 20h10"/><path d="M10 20c5.5-2.5.8-6.4 3-10"/><path d="M9.5 9.4c1.1.8 1.8 2.2 2.3 3.7-2 .4-3.5.4-4.8-.3-1.2-.6-2.3-1.9-3-4.2 2.8-.5 4.4 0 5.5.8z"/><path d="M14.1 6a7 7 0 0 0-1.1 4c1.9-.1 3.3-.6 4.3-1.4 1-1 1.6-2.3 1.7-4.6-2.7.1-4 1-4.9 2z"/>
+  </symbol>
+  <symbol id="i-voltar" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="m12 19-7-7 7-7"/><path d="M19 12H5"/>
+  </symbol>
+  <symbol id="i-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="m9 18 6-6-6-6"/>
   </symbol>
   <symbol id="i-fechar" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
     <path d="M18 6 6 18"/><path d="m6 6 12 12"/>
@@ -185,6 +200,27 @@
         <div class="hint-text">
           Clique em um hexágono para ver os indicadores daquela célula. Com a chave desligada,
           o clique mostra apenas um resumo com os valores — sem consulta nova ao banco.
+        </div>
+
+        <!-- Grupo 2: as 60 áreas. Uma caixa por tema; uma área com mais de um tema
+             aparece em cada tema ligado (contorno em faixas, uma cor por tema). -->
+        <h3>Áreas Prioritárias por Temática</h3>
+        <div class="control-group checkbox-row">
+          <input type="checkbox" id="toggle-areas" checked>
+          <label for="toggle-areas">Exibir as áreas prioritárias</label>
+        </div>
+        <div id="temas-lista" class="temas-lista" role="group" aria-label="Temas estratégicos"></div>
+        <div class="control-group checkbox-row nested">
+          <input type="checkbox" id="toggle-areas-rotulos" checked>
+          <label for="toggle-areas-rotulos" class="small-label">Mostrar o número das áreas</label>
+        </div>
+        <div class="hint-text" id="areas-aviso" hidden>
+          As áreas prioritárias ainda não estão disponíveis nesta base.
+          Rode <code>supabase/06_areas_prioritarias_e_sbn.sql</code> no SQL Editor e recarregue a página.
+        </div>
+        <div class="hint-text" id="areas-dica">
+          Clique numa área para abrir o painel de soluções (SbN) indicadas para ela.
+          Com as áreas ligadas, o clique dentro delas abre esse painel; para ver o radar de um hexágono, clique fora das áreas ou desligue a camada.
         </div>
 
         <h3>Limites</h3>
@@ -314,7 +350,7 @@
         <p class="texto" id="creditos-texto">
           Prefeitura de Maricá. Dados e metodologia: equipe do Estudo Estratégico de adaptação climática.
         </p>
-        <p class="texto nota">Versão 3.0.0 do portal.</p>
+        <p class="texto nota">Versão 3.2.0 do portal.</p>
       </section>
 
     </div>
@@ -323,6 +359,7 @@
   <!-- =================================================================
        4. MAPA
        =================================================================== -->
+  <div id="coluna-mapa">
   <main id="map-wrapper">
     <div id="map" tabindex="0" aria-label="Mapa"></div>
 
@@ -343,6 +380,10 @@
       <div class="legend" id="distritos-legend">
         <div class="legend-row"><span class="swatch-line"></span><span class="legend-label">Limite distrital</span></div>
       </div>
+      <div class="legend" id="areas-legend" hidden>
+        <div class="legend-title">Áreas Prioritárias</div>
+        <div id="areas-legend-rows"></div>
+      </div>
       <div class="legend" id="risk-legend">
         <div class="legend-title" id="risk-legend-titulo">Índice de Risco Climático</div>
         <div id="risk-legend-rows"></div>
@@ -358,6 +399,29 @@
 
     <div id="search-marker">📍</div>
   </main>
+
+  <!-- =================================================================
+       5. PAINEL INFERIOR — Área -> Tema -> lista de SbN -> ficha
+       Fica DENTRO da coluna do mapa: ao abrir, o mapa encolhe (não é coberto).
+       Altura entre 30% e 60% da coluna (70% no celular), ajustável pela alça.
+       ================================================================= -->
+  <section id="sbn-painel" hidden aria-labelledby="sbn-titulo">
+    <div id="sbn-alca" role="separator" aria-orientation="horizontal" tabindex="0"
+         aria-label="Ajustar a altura do painel (setas para cima e para baixo; arraste para baixo para fechar)"
+         aria-valuemin="30" aria-valuemax="60" aria-valuenow="50"><span></span></div>
+    <header id="sbn-topo">
+      <button id="sbn-voltar" type="button" class="sbn-btn-icone" aria-label="Voltar" hidden>
+        <svg class="icone" aria-hidden="true"><use href="#i-voltar"></use></svg><span>Voltar</span>
+      </button>
+      <nav id="sbn-trilha" aria-label="Onde você está"></nav>
+      <button id="sbn-fechar" type="button" class="sbn-btn-icone" aria-label="Fechar painel">
+        <svg class="icone" aria-hidden="true"><use href="#i-fechar"></use></svg>
+      </button>
+    </header>
+    <h2 id="sbn-titulo" class="sr-only">Soluções baseadas na natureza para a área selecionada</h2>
+    <div id="sbn-corpo" tabindex="-1"></div>
+  </section>
+  </div>
 </div>
 
 <!-- Janela de detalhes da célula (abre ao clicar num hexágono) -->
@@ -393,12 +457,13 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 <!-- Ordem obrigatória: cada arquivo usa o anterior. Ao alterar qualquer um deles,
      aumente o ?v= de TODOS para os visitantes não ficarem com a versão em cache. -->
-<script src="js/config.js?v=3.1.0"></script>
-<script src="js/util.js?v=3.1.0"></script>
-<script src="js/api.js?v=3.1.0"></script>
-<script src="js/mapa.js?v=3.1.0"></script>
-<script src="js/ferramentas.js?v=3.1.0"></script>
-<script src="js/painel.js?v=3.1.0"></script>
-<script src="js/app.js?v=3.1.0"></script>
+<script src="js/config.js?v=3.2.0"></script>
+<script src="js/util.js?v=3.2.0"></script>
+<script src="js/api.js?v=3.2.0"></script>
+<script src="js/mapa.js?v=3.2.0"></script>
+<script src="js/ferramentas.js?v=3.2.0"></script>
+<script src="js/painel.js?v=3.2.0"></script>
+<script src="js/fichas.js?v=3.2.0"></script>
+<script src="js/app.js?v=3.2.0"></script>
 </body>
 </html>

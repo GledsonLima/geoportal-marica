@@ -47,8 +47,8 @@
     NS.ferramentas.carregarCatalogo();
 
     // 4. Grade e distritos juntos; um não derruba o outro.
-    var tarefas = await Promise.allSettled([M.carregarGrade(setLoading), M.carregarDistritos()]);
-    var grade = tarefas[0], distr = tarefas[1];
+    var tarefas = await Promise.allSettled([M.carregarGrade(setLoading), M.carregarDistritos(), M.carregarAreas()]);
+    var grade = tarefas[0], distr = tarefas[1], areas = tarefas[2];
 
     if (grade.status === 'rejected') {
       console.error('[app] grade:', grade.reason);
@@ -60,6 +60,14 @@
               (distr.status === 'fulfilled' ? ' · ' + distr.value + ' distritos' : ''), 'ok');
       // Só agora dá para saber se a base trouxe os três mapas intermediários.
       NS.painel.atualizarDisponibilidade();
+    }
+
+    // Áreas prioritárias: falhar não derruba o resto do portal.
+    if (areas.status === 'fulfilled') {
+      NS.painel.montarTemas();
+    } else {
+      console.error('[app] áreas prioritárias:', areas.reason);
+      NS.painel.areasIndisponiveis();
     }
 
     if (distr.status === 'rejected') {
@@ -76,7 +84,7 @@
   // Exposto só para depuração no Console (F12): window.__sigweb
   window.__sigweb = {
     map: M.map, hexSource: M.hexSource, distritosSource: M.distritosSource,
-    hexPorId: M.hexPorId, classifyRisk: M.classifyRisk, RISK_BREAKS: M.RISK_BREAKS,
+    hexPorId: M.hexPorId, areasSource: M.areasSource, classifyRisk: M.classifyRisk, RISK_BREAKS: M.RISK_BREAKS,
     modoLeve: M.modoLeve, BASEMAPS: M.BASEMAPS, NS: NS
   };
   // Compatibilidade com a versão anterior

@@ -30,6 +30,14 @@ window.GEOPORTAL_CONFIG = {
   VIEW_DISTRITOS: 'vw_limites_distritais',
   TABELA_CATALOGO: 'catalogo_camadas',
 
+  // ---- Áreas prioritárias e SbN (script 06) -----------------------------
+  VIEW_AREAS: 'vw_areas_prioritarias',      // 60 áreas em EPSG:4326, com o vetor `temas`
+  TABELA_TEMAS: 'tema_estrategico',         // 5 temas: nome, nome curto e cor
+  RPC_TEMAS_DA_AREA: 'temas_da_area',       // parâmetro tipado p_num_area (smallint)
+  RPC_SBN_DO_TEMA: 'sbn_do_tema',           // parâmetro tipado p_tema (smallint)
+  RPC_FICHA: 'ficha_sbn',                   // parâmetro p_slug (text)
+  RPC_FUNCOES: 'sbn_funcoes',               // as 20 funções da grade da ficha
+
   // ---- Município ------------------------------------------------------
   // Caixa envolvente usada para limitar a busca de endereços a Maricá.
   // Ordem: [oeste, sul, leste, norte] em graus decimais (EPSG:4326).
