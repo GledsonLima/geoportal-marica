@@ -26,6 +26,7 @@
     M.redesenharLegendas();
     NS.painel.ligar();
     NS.ferramentas.ligar();
+    if (NS.aux) NS.aux.ligar();
 
     // 2. Guardas de configuração.
     var papel = NS.api.papelDaChave();

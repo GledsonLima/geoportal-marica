@@ -12,6 +12,7 @@ arquivo → *Commit changes* → o site se atualiza em ~1 minuto).
 | `js/painel.js` | Comportamento da barra superior, busca, painéis e janela de detalhes |
 | `js/fichas.js` | Painel inferior: Área → Tema → lista de SbN → ficha (altura, arraste, modelo da ficha) |
 | `js/desenho.js` | Medir distância/área e relatório de um ponto ou área desenhada |
+| `js/auxiliares.js` | Camadas auxiliares: carga sob demanda, simbologia, rótulos e legendas |
 | `js/ferramentas.js` | Filtro, upload, exportação e catálogo de camadas |
 | `js/util.js`, `js/api.js`, `js/app.js` | Apoio, conversa com o banco e inicialização |
 
@@ -148,3 +149,22 @@ Ao mudar, atualize também o texto do ⓘ "Relatório de um local" em `index.htm
 
 **Cor das fichas** — vem de `tema_estrategico.cor`. A função `paletaDoTema`, em `js/fichas.js`,
 escurece a cor até o texto branco sobre ela passar de 4,5:1.
+
+## Camadas auxiliares (v3.4.0)
+
+**Cores do zoneamento** — objeto `ZONAS` no início de `js/auxiliares.js` (uma cor por sigla). As
+siglas vêm da coluna `sigla` de `aux_zoneamento` (script 07d). Viário: objeto `VIARIO`; pontos: `PONTOS`.
+
+**Estilo de bairros, UCs e corpos hídricos** — constantes `BAIRRO_LINHA`, `UC_INTEGRAL`,
+`UC_SUSTENTAVEL` e `HID` no mesmo arquivo.
+
+**A partir de que zoom cada rótulo aparece** — o segundo argumento das funções de estilo é a
+resolução (metros por pixel): `res > 60` some longe; quanto menor o número, mais perto é preciso estar.
+
+**Opacidade inicial do zoneamento** — `opacidadeZon` (0,5) e o `value="50"` do controle em `index.html`.
+
+**Fundo das caixas dos grupos** — `--fundo-grupo`, `--borda-grupo` e `--sombra-grupo` no `:root` de
+`css/estilo.css`; a variante rosada está comentada ao lado.
+
+**Reprocessar uma camada** — com um GeoPackage novo, rode `python3 -I gerar_sql07.py <pasta> supabase`
+(o gerador está em `ferramentas_dados/`) ou peça a regeração; depois rode o script correspondente de novo.

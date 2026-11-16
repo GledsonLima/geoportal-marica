@@ -545,8 +545,16 @@ window.SIGWEB = window.SIGWEB || {};
       M.distritosLayer.setVisible(e.target.checked);
       $('distritos-legend').style.display = e.target.checked ? 'block' : 'none';
     });
-    $('toggle-distritos-labels').addEventListener('change', function (e) {
-      M.setRotulosDistritos(e.target.checked);
+    // (v3.4.0) "Mostrar nomes dos distritos" virou "Mostrar rótulos", de todas as
+    // camadas auxiliares: está em js/auxiliares.js.
+    $('areas-fill-slider').addEventListener('input', function (e) {
+      M.setOpacidadeAreas(e.target.value / 100);
+      $('areas-fill-value').textContent = e.target.value;
+    });
+    $('enquadrar-temas').addEventListener('click', function () {
+      var n = M.enquadrarTemas();
+      $('enquadrar-status').textContent = n ? '' : 'Ligue ao menos um tema para enquadrar.';
+      if (n && NS.ehCelular()) fecharPainel();     // no celular, mostra o mapa enquadrado
     });
     $('opacity-slider').addEventListener('input', function (e) {
       M.hexLayer.setOpacity(e.target.value / 100);
@@ -569,6 +577,8 @@ window.SIGWEB = window.SIGWEB || {};
       M.setAreasVisiveis(e.target.checked);
       document.querySelectorAll('#temas-lista input').forEach(function (i) { i.disabled = !e.target.checked; });
       $('toggle-areas-rotulos').disabled = !e.target.checked;
+      $('areas-fill-slider').disabled = !e.target.checked;
+      $('enquadrar-temas').disabled = !e.target.checked;
       if (!e.target.checked && !M.areasBaseLayer.getVisible() && NS.fichas) NS.fichas.fechar();
     });
     $('toggle-areas-rotulos').addEventListener('change', function (e) {
@@ -598,7 +608,7 @@ window.SIGWEB = window.SIGWEB || {};
     lista.innerHTML = M.temas().map(function (t) {
       return '<div class="tema-linha"><input type="checkbox" id="tema-' + esc(t.id) + '" data-tema="' + esc(t.id) + '" checked>' +
         '<label for="tema-' + esc(t.id) + '"><span class="tema-cor" style="background:' + esc(t.cor) + '"></span>' +
-        '<span>' + esc(t.nome_curto) + '</span><span class="tema-n">(' + (cont[t.id] || 0) + ((cont[t.id] || 0) === 1 ? ' área' : ' áreas') + ')</span></label></div>';
+        '<span>' + esc(t.nome) + ' <span class="tema-n">(' + (cont[t.id] || 0) + ((cont[t.id] || 0) === 1 ? ' área' : ' áreas') + ')</span></span></label></div>';
     }).join('');
     lista.querySelectorAll('input').forEach(function (i) {
       i.addEventListener('change', function () { M.setTemaVisivel(Number(i.dataset.tema), i.checked); });

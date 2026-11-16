@@ -7,7 +7,7 @@
   <!--
   ======================================================================
   SIGWEB SBN MARICÁ — frontend estático
-  VERSÃO: v3.3.0 — interface, camadas do índice, áreas prioritárias, fichas de SbN, medir e relatório do local
+  VERSÃO: v3.4.0 — interface, índice, áreas prioritárias, fichas de SbN, medir, relatório e camadas auxiliares
 
   Dados: PostgreSQL/PostGIS + API REST (PostgREST), chave pública + RLS somente leitura
   Hospedagem: GitHub Pages (arquivos estáticos, sem servidor próprio)
@@ -28,9 +28,15 @@
     painel.js      barra superior, busca, faixa de ícones, painéis, janela de detalhes
     fichas.js      painel inferior: Área -> Tema -> lista de SbN -> ficha
     desenho.js     medir distância/área e relatório de um ponto ou área desenhada
+    auxiliares.js  camadas auxiliares (bairros, UCs, zoneamento, corpos hídricos)
     app.js         inicialização e ligação entre as partes
 
   CHANGELOG
+  v3.4.0 Camadas Auxiliares (bairros, Unidades de Conservação, zoneamento da LC
+         400/2025 e corpos hídricos), carregadas sob demanda, com "Mostrar rótulos"
+         único; grupo "Temas Estratégicos de Adaptação Climática" com nomes
+         completos e ferramentas próprias; caixas com sombra e fundo; filtro com
+         Enter; ⓘ menor; relatório do local com bairro, UC e zona.
   v3.3.0 Menu Camadas reorganizado (Risco Climático -> Priorização Territorial ->
          Áreas por Temática), ferramentas da camada agrupadas (opacidade do
          preenchimento nova, opacidade da grade, gráfico de radar, filtro),
@@ -54,7 +60,7 @@
   <title>SIGWEB SBN Maricá</title>
   <link rel="icon" href="img/logo-marica.png">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@9.2.4/ol.css">
-  <link rel="stylesheet" href="css/estilo.css?v=3.3.0">
+  <link rel="stylesheet" href="css/estilo.css?v=3.4.0">
 </head>
 <body>
 
@@ -224,10 +230,10 @@
           <div class="info-texto" id="info-radar" hidden>Vale só para esta camada. Ligado: ao selecionar um hexágono abre o gráfico com os indicadores daquela célula. Desligado: o clique mostra apenas um resumo com os valores, sem consulta nova ao banco.</div>
 
           <div class="ctrl-linha">
-            <span class="rotulo-ferr">Filtrar por indicador: <strong id="filter-camada">Índice de Risco Climático</strong></span>
+            <span class="rotulo-ferr">Filtrando por indicador:<br><strong id="filter-camada">Índice de Risco Climático</strong></span>
             <button type="button" class="info-btn" aria-expanded="false" aria-controls="info-filtro" aria-label="Explicação: filtro por indicador" title="O que é isto?"><svg class="icone" aria-hidden="true"><use href="#i-sobre"></use></svg></button>
           </div>
-          <div class="info-texto" id="info-filtro" hidden>Mostra só os hexágonos com valor entre o mínimo e o máximo informados (pode usar só um dos dois). O filtro vale para a camada exibida e é limpo ao trocar de camada. Também é possível ocultar classes clicando nelas na legenda.</div>
+          <div class="info-texto" id="info-filtro" hidden>Mostra só os hexágonos com valor entre o mínimo e o máximo informados (pode usar só um dos dois). Aplique com o botão ou com a tecla <kbd>Enter</kbd>. O filtro vale para a camada exibida e é limpo ao trocar de camada. Também é possível ocultar classes clicando nelas na legenda.</div>
           <div class="control-group two-cols">
             <div><label for="filter-min">Mínimo</label><input type="number" id="filter-min" step="any" placeholder="ex: 2.47"></div>
             <div><label for="filter-max">Máximo</label><input type="number" id="filter-max" step="any" placeholder="ex: 3.59"></div>
@@ -247,35 +253,98 @@
         </div>
         <div class="info-texto" id="info-areas60" hidden>Reúne as 60 áreas delimitadas a partir da análise de risco climático, que constituem o foco territorial das estratégias de adaptação. Clique numa área para ver as soluções baseadas na natureza (SbN) indicadas para ela.</div>
 
-        <!-- Grupo 3: as mesmas 60 áreas, uma chave por tema; uma área com mais de
-             um tema aparece em cada tema ligado (contorno em faixas). -->
-        <h3>Áreas Prioritárias por Temática</h3>
+        <!-- Grupo 3: as mesmas 60 áreas, uma chave por tema (nome completo); uma
+             área com mais de um tema aparece em cada tema ligado (contorno em faixas). -->
+        <h3>Temas Estratégicos de Adaptação Climática</h3>
         <div class="ctrl-linha">
           <div class="checkbox-row"><input type="checkbox" id="toggle-areas" checked>
             <label for="toggle-areas">Exibir as áreas por temática</label></div>
-          <button type="button" class="info-btn" aria-expanded="false" aria-controls="info-tematicas" aria-label="Explicação: áreas por temática" title="O que é isto?"><svg class="icone" aria-hidden="true"><use href="#i-sobre"></use></svg></button>
+          <button type="button" class="info-btn" aria-expanded="false" aria-controls="info-tematicas" aria-label="Explicação: temas estratégicos" title="O que é isto?"><svg class="icone" aria-hidden="true"><use href="#i-sobre"></use></svg></button>
         </div>
         <div class="info-texto" id="info-tematicas" hidden>Cada uma das 60 áreas foi associada a um ou mais temas estratégicos. Ligue ou desligue os temas para filtrar; uma área com mais de um tema ligado aparece com o contorno em faixas, uma cor por tema. Clique numa área para abrir o painel de soluções (SbN). Com as áreas ligadas, o clique dentro delas abre esse painel; para ver o radar de um hexágono, clique fora das áreas ou desligue as camadas de áreas.</div>
-        <div id="temas-lista" class="temas-lista" role="group" aria-label="Temas estratégicos"></div>
-        <div class="control-group checkbox-row nested">
-          <input type="checkbox" id="toggle-areas-rotulos" checked>
-          <label for="toggle-areas-rotulos" class="small-label">Mostrar o número das áreas</label>
+        <div class="ctrl-linha secundaria">
+          <div class="checkbox-row"><input type="checkbox" id="toggle-areas-rotulos" checked>
+            <label for="toggle-areas-rotulos">Exibir identificação das áreas</label></div>
+          <button type="button" class="info-btn" aria-expanded="false" aria-controls="info-identificacao" aria-label="Explicação: identificação das áreas" title="O que é isto?"><svg class="icone" aria-hidden="true"><use href="#i-sobre"></use></svg></button>
         </div>
+        <div class="info-texto" id="info-identificacao" hidden>Ativa ou desativa a identificação numérica das áreas diretamente no mapa, facilitando a localização e a consulta.</div>
+        <div id="temas-lista" class="temas-lista" role="group" aria-label="Temas estratégicos"></div>
         <div class="hint-text" id="areas-aviso" hidden>
           As áreas prioritárias ainda não estão disponíveis nesta base.
           Rode <code>supabase/06_areas_prioritarias_e_sbn.sql</code> no SQL Editor e recarregue a página.
         </div>
-
-        <h3>Limites</h3>
-        <div class="ctrl-linha">
-          <div class="checkbox-row"><input type="checkbox" id="toggle-distritos" checked>
-            <label for="toggle-distritos">Limites distritais</label></div>
-          <button type="button" class="info-btn" aria-expanded="false" aria-controls="info-limites" aria-label="Explicação: limites distritais" title="O que é isto?"><svg class="icone" aria-hidden="true"><use href="#i-sobre"></use></svg></button>
+        <div class="ferramentas-camada" role="group" aria-labelledby="titulo-ferr-temas">
+          <h4 id="titulo-ferr-temas">Ferramentas da camada</h4>
+          <div class="ctrl-linha">
+            <label for="areas-fill-slider">Opacidade do preenchimento (<span id="areas-fill-value">20</span>%)</label>
+            <button type="button" class="info-btn" aria-expanded="false" aria-controls="info-areas-preenchimento" aria-label="Explicação: opacidade do preenchimento das áreas" title="O que é isto?"><svg class="icone" aria-hidden="true"><use href="#i-sobre"></use></svg></button>
+          </div>
+          <div class="info-texto" id="info-areas-preenchimento" hidden>Controla a transparência do interior das áreas, mantendo os contornos visíveis. Com valores baixos, a grade de risco e o mapa de fundo aparecem por dentro das áreas.</div>
+          <input type="range" id="areas-fill-slider" min="0" max="100" value="20">
+          <div class="ctrl-linha">
+            <button type="button" class="btn btn-ferr btn-enquadrar" id="enquadrar-temas">Enquadrar áreas da temática</button>
+            <button type="button" class="info-btn" aria-expanded="false" aria-controls="info-enquadrar" aria-label="Explicação: enquadrar áreas da temática" title="O que é isto?"><svg class="icone" aria-hidden="true"><use href="#i-sobre"></use></svg></button>
+          </div>
+          <div class="info-texto" id="info-enquadrar" hidden>Ajusta o zoom para destacar a distribuição territorial das áreas associadas aos temas ligados.</div>
+          <div id="enquadrar-status" class="status-text" role="status"></div>
         </div>
-        <div class="info-texto" id="info-limites" hidden>Limites dos quatro distritos de Maricá (Maricá, Ponta Negra, Inoã e Itaipuaçu).</div>
-        <div class="control-group checkbox-row nested">
-          <input type="checkbox" id="toggle-distritos-labels">
-          <label for="toggle-distritos-labels" class="small-label">Mostrar nomes dos distritos</label>
+
+        <!-- Grupo 4: camadas de referência, baixadas sob demanda (js/auxiliares.js). -->
+        <div class="ctrl-linha cab"><h3>Camadas Auxiliares</h3><button type="button" class="info-btn" aria-expanded="false" aria-controls="info-auxiliares" aria-label="Explicação: camadas auxiliares" title="O que é isto?"><svg class="icone" aria-hidden="true"><use href="#i-sobre"></use></svg></button></div>
+        <div class="info-texto" id="info-auxiliares" hidden>Camadas de referência para ler o risco e as áreas prioritárias no território. São baixadas só quando ligadas pela primeira vez. "Mostrar rótulos" vale para todas elas.</div>
+        <div class="ctrl-linha secundaria">
+          <div class="checkbox-row"><input type="checkbox" id="toggle-rotulos-aux" checked>
+            <label for="toggle-rotulos-aux">Mostrar rótulos</label></div>
+          <button type="button" class="info-btn" aria-expanded="false" aria-controls="info-rotulos" aria-label="Explicação: rótulos" title="O que é isto?"><svg class="icone" aria-hidden="true"><use href="#i-sobre"></use></svg></button>
+        </div>
+        <div class="info-texto" id="info-rotulos" hidden>Mostra os nomes das camadas auxiliares ligadas (distritos, bairros, UCs, zonas, corpos hídricos). Alguns rótulos só aparecem ao aproximar o mapa, para não poluir a visão do município.</div>
+
+        <div class="aux-grupo" role="group" aria-labelledby="aux-adm">
+          <h4 id="aux-adm">Divisão administrativa</h4>
+          <div class="ctrl-linha">
+            <div class="checkbox-row"><input type="checkbox" id="toggle-distritos" checked>
+              <label for="toggle-distritos"><span class="sim-linha" style="border-top:2px solid #1e2a38"></span>Limites distritais</label></div>
+            <button type="button" class="info-btn" aria-expanded="false" aria-controls="info-limites" aria-label="Explicação: limites distritais" title="O que é isto?"><svg class="icone" aria-hidden="true"><use href="#i-sobre"></use></svg></button>
+          </div>
+          <div class="info-texto" id="info-limites" hidden>Limites dos quatro distritos de Maricá (Maricá, Ponta Negra, Inoã e Itaipuaçu).</div>
+          <div class="ctrl-linha">
+            <div class="checkbox-row"><input type="checkbox" id="toggle-bairros">
+              <label for="toggle-bairros"><span class="sim-linha" style="border-top:2px dashed #6d5d8a"></span>Limites dos bairros <span class="aux-status" id="status-bairros" aria-live="polite"></span></label></div>
+            <button type="button" class="info-btn" aria-expanded="false" aria-controls="info-bairros" aria-label="Explicação: limites dos bairros" title="O que é isto?"><svg class="icone" aria-hidden="true"><use href="#i-sobre"></use></svg></button>
+          </div>
+          <div class="info-texto" id="info-bairros" hidden>Limites dos 50 bairros de Maricá. Somente contorno e nome.</div>
+        </div>
+
+        <div class="aux-grupo" role="group" aria-labelledby="aux-ref">
+          <h4 id="aux-ref">Referências territoriais</h4>
+          <div class="ctrl-linha">
+            <div class="checkbox-row"><input type="checkbox" id="toggle-ucs">
+              <label for="toggle-ucs"><span class="sim-linha" style="border-top:3px solid #14632f"></span>Unidades de Conservação <span class="aux-status" id="status-unidades_conservacao" aria-live="polite"></span></label></div>
+            <button type="button" class="info-btn" aria-expanded="false" aria-controls="info-ucs" aria-label="Explicação: unidades de conservação" title="O que é isto?"><svg class="icone" aria-hidden="true"><use href="#i-sobre"></use></svg></button>
+          </div>
+          <div class="info-texto" id="info-ucs" hidden>Unidades de Conservação federais, estaduais e municipais que incidem em Maricá (fonte: INEA, 2026). Linha contínua: proteção integral; tracejada: uso sustentável.</div>
+          <div class="ctrl-linha">
+            <div class="checkbox-row"><input type="checkbox" id="toggle-zoneamento">
+              <label for="toggle-zoneamento"><span class="sim-area" style="background:linear-gradient(90deg,#d6604d 0 33%,#fdb863 33% 66%,#a6d96a 66%);border-color:#777"></span>Zoneamento <span class="tema-n">(LC 400/2025)</span> <span class="aux-status" id="status-zoneamento" aria-live="polite"></span></label></div>
+            <button type="button" class="info-btn" aria-expanded="false" aria-controls="info-zoneamento" aria-label="Explicação: zoneamento" title="O que é isto?"><svg class="icone" aria-hidden="true"><use href="#i-sobre"></use></svg></button>
+          </div>
+          <div class="info-texto" id="info-zoneamento" hidden>Macrozoneamento de Maricá, instituído pela <a href="https://publica.marica.rj.gov.br/leis/lei-complementar-no-4002025.html" target="_blank" rel="noopener">Lei Complementar nº 400, de 17 de janeiro de 2025</a> (Plano Diretor). Macrozonas em cores; áreas especiais (AEIS, AEIA, AEID, APA) hachuradas por cima. A legenda completa está no menu Legenda.</div>
+          <div id="zoneamento-sub" class="aux-sub" hidden>
+            <div class="checkbox-row"><input type="checkbox" id="toggle-zon-poligonos" checked>
+              <label for="toggle-zon-poligonos">Macrozonas e áreas especiais</label></div>
+            <div class="checkbox-row"><input type="checkbox" id="toggle-zon-pontos" checked>
+              <label for="toggle-zon-pontos">Interesse pesqueiro e indígena (pontos)</label></div>
+            <div class="checkbox-row"><input type="checkbox" id="toggle-zon-viario">
+              <label for="toggle-zon-viario">Hierarquia viária</label></div>
+            <label for="zon-opacity-slider" class="rotulo-slider">Opacidade do zoneamento (<span id="zon-opacity-value">50</span>%)</label>
+            <input type="range" id="zon-opacity-slider" min="0" max="100" value="50">
+          </div>
+          <div class="ctrl-linha">
+            <div class="checkbox-row"><input type="checkbox" id="toggle-hidricos">
+              <label for="toggle-hidricos"><span class="sim-area" style="background:rgba(116,169,207,0.6);border-color:#3a7fb5"></span>Corpos hídricos <span class="aux-status" id="status-corpos_hidricos" aria-live="polite"></span></label></div>
+            <button type="button" class="info-btn" aria-expanded="false" aria-controls="info-hidricos" aria-label="Explicação: corpos hídricos" title="O que é isto?"><svg class="icone" aria-hidden="true"><use href="#i-sobre"></use></svg></button>
+          </div>
+          <div class="info-texto" id="info-hidricos" hidden>Polígonos do sistema lagunar, canais e áreas úmidas (origem: OpenStreetMap). Azul: espelho d’água; verde-água tracejado: área úmida.</div>
         </div>
       </section>
 
@@ -299,6 +368,8 @@
           <button type="button" class="info-btn" aria-expanded="false" aria-controls="info-paleta" aria-label="Explicação: paleta segura para daltonismo" title="O que é isto?"><svg class="icone" aria-hidden="true"><use href="#i-sobre"></use></svg></button>
         </div>
         <div class="info-texto" id="info-paleta" hidden>Troca as cores do estudo por uma escala sequencial única (ColorBrewer YlOrRd), legível por quem tem daltonismo. As <strong>faixas não mudam</strong> — só as cores.</div>
+        <h3 class="legenda-sub">Zoneamento (LC nº 400/2025)</h3>
+        <div id="legenda-zoneamento" class="legenda-zoneamento"></div>
       </section>
 
       <!-- ---------------- FERRAMENTAS ----------------
@@ -388,7 +459,7 @@
         <p class="texto" id="creditos-texto">
           Prefeitura de Maricá. Dados e metodologia: equipe do Estudo Estratégico de adaptação climática.
         </p>
-        <p class="texto nota">Versão 3.3.0 do portal.</p>
+        <p class="texto nota">Versão 3.4.0 do portal.</p>
       </section>
 
     </div>
@@ -417,6 +488,10 @@
     <div id="legend-stack">
       <div class="legend" id="distritos-legend">
         <div class="legend-row"><span class="swatch-line"></span><span class="legend-label">Limite distrital</span></div>
+      </div>
+      <div class="legend" id="aux-legend" hidden>
+        <div class="legend-title">Camadas auxiliares</div>
+        <div id="aux-legend-rows"></div>
       </div>
       <div class="legend" id="areas-legend" hidden>
         <div class="legend-title">Áreas Prioritárias</div>
@@ -495,14 +570,15 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 <!-- Ordem obrigatória: cada arquivo usa o anterior. Ao alterar qualquer um deles,
      aumente o ?v= de TODOS para os visitantes não ficarem com a versão em cache. -->
-<script src="js/config.js?v=3.3.0"></script>
-<script src="js/util.js?v=3.3.0"></script>
-<script src="js/api.js?v=3.3.0"></script>
-<script src="js/mapa.js?v=3.3.0"></script>
-<script src="js/ferramentas.js?v=3.3.0"></script>
-<script src="js/painel.js?v=3.3.0"></script>
-<script src="js/fichas.js?v=3.3.0"></script>
-<script src="js/desenho.js?v=3.3.0"></script>
-<script src="js/app.js?v=3.3.0"></script>
+<script src="js/config.js?v=3.4.0"></script>
+<script src="js/util.js?v=3.4.0"></script>
+<script src="js/api.js?v=3.4.0"></script>
+<script src="js/mapa.js?v=3.4.0"></script>
+<script src="js/ferramentas.js?v=3.4.0"></script>
+<script src="js/painel.js?v=3.4.0"></script>
+<script src="js/fichas.js?v=3.4.0"></script>
+<script src="js/desenho.js?v=3.4.0"></script>
+<script src="js/auxiliares.js?v=3.4.0"></script>
+<script src="js/app.js?v=3.4.0"></script>
 </body>
 </html>

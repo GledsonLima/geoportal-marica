@@ -38,6 +38,9 @@ window.GEOPORTAL_CONFIG = {
   RPC_FICHA: 'ficha_sbn',                   // parâmetro p_slug (text)
   RPC_FUNCOES: 'sbn_funcoes',               // as 20 funções da grade da ficha
 
+  // ---- Camadas auxiliares (scripts 07a–07d) --------------------------
+  RPC_CAMADA_AUXILIAR: 'camada_auxiliar',   // p_camada: bairros | unidades_conservacao | corpos_hidricos | zoneamento | zoneamento_pontos | zoneamento_viario
+
   // ---- Município ------------------------------------------------------
   // Caixa envolvente usada para limitar a busca de endereços a Maricá.
   // Ordem: [oeste, sul, leste, norte] em graus decimais (EPSG:4326).

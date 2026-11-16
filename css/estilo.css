@@ -1,5 +1,5 @@
 /* =====================================================================
-   SIGWEB SBN MARICÁ — folha de estilo (v3.3.0)
+   SIGWEB SBN MARICÁ — folha de estilo (v3.4.0)
 
    Tudo o que é cor, medida e fonte está no bloco :root abaixo.
    Trocar um valor ali muda o portal inteiro — ver PERSONALIZAR.md.
@@ -28,6 +28,14 @@
   /* Barras dos GRUPOS na janela de detalhes. Os grupos não têm classificação
      publicada no estudo, então saem numa cor neutra, sem sugerir classes. */
   --cor-barra-neutra: #8aa0b4;
+
+  /* ---- Caixas dos grupos de camadas (v3.4.0) --------------------------
+     Uma regra só para todas: fundo levemente acinzentado + sombra leve.
+     Variante rosada: troque pelas linhas comentadas logo abaixo.          */
+  --fundo-grupo: #f3f5f7;
+  --borda-grupo: #e1e5ea;
+  /* --fundo-grupo: #fbf3f3;  --borda-grupo: #f0dcdd; */
+  --sombra-grupo: 0 1px 3px rgba(15, 23, 42, 0.10), 0 1px 1px rgba(15, 23, 42, 0.04);
 
   /* ---- Ficha de SbN (painel inferior) --------------------------------
      Tons do modelo de ficha: azul do título e dos benefícios, rosa das restrições. */
@@ -264,7 +272,11 @@ body {
 .checkbox-row.nested { margin-left: 24px; margin-bottom: 14px; }
 
 /* Grupo de camadas do índice: quatro atributos da MESMA grade, só um por vez */
-.grupo-indice { border: 1px solid var(--cor-borda); border-radius: var(--raio); padding: 10px 12px 4px 12px; margin: 0 0 12px 0; }
+.grupo-indice, .ferramentas-camada, .aux-grupo {
+  background: var(--fundo-grupo); border: 1px solid var(--borda-grupo);
+  border-radius: var(--raio); box-shadow: var(--sombra-grupo);
+}
+.grupo-indice { padding: 10px 12px 4px 12px; margin: 0 0 6px 0; }
 .radio-row { display: flex; align-items: flex-start; gap: 8px; font-size: 0.86rem; margin-bottom: 9px; }
 .radio-row input[type="radio"] { accent-color: var(--cor-primaria); width: 16px; height: 16px; margin-top: 1px; flex-shrink: 0; }
 .radio-row label { line-height: 1.35; }
@@ -294,11 +306,11 @@ body {
 .ctrl-linha + .info-texto, .ctrl-linha { margin-bottom: 8px; }
 .radios { flex: 1; }
 .info-btn {
-  flex-shrink: 0; width: 26px; height: 26px; border-radius: 50%; border: none; cursor: pointer;
+  flex-shrink: 0; width: 20px; height: 20px; border-radius: 50%; border: none; cursor: pointer;
   display: inline-flex; align-items: center; justify-content: center;
   background: none; color: var(--cor-texto-fraco); padding: 0;
 }
-.info-btn .icone { width: 18px; height: 18px; }
+.info-btn .icone { width: 14px; height: 14px; }
 .info-btn:hover, .info-btn[aria-expanded="true"] { color: var(--cor-primaria); background: var(--cor-primaria-clara); }
 .info-btn:focus-visible { outline: 2px solid var(--cor-primaria); outline-offset: 1px; }
 .info-texto {
@@ -310,8 +322,9 @@ body {
 
 /* Ferramentas que valem só para a grade do risco climático: caixa ligada ao grupo */
 .ferramentas-camada {
-  border: 1px solid var(--cor-borda); border-radius: var(--raio);
-  padding: 10px 12px 8px 12px; margin: 0 0 12px 0; background: #fbfcfd;
+  padding: 10px 12px 8px 12px; margin: 0 0 14px 0;
+  /* Filete vermelho à esquerda: a caixa "pertence" ao bloco de camadas logo acima */
+  border-left: 3px solid var(--cor-primaria);
 }
 .ferramentas-camada h4 {
   margin: 0 0 10px 0; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--cor-texto-suave);
@@ -322,6 +335,47 @@ body {
 .ferramentas-camada .checkbox-row { margin-bottom: 0; }
 .botoes-linha { display: flex; gap: 6px; }
 .botoes-linha .btn { margin-top: 4px; padding: 7px; }
+
+
+/* ---- v3.4.0: linha secundária, temas recuados, auxiliares ---------- */
+/* Controle subordinado (identificação das áreas, rótulos): mesmo alinhamento
+   do controle principal, em cinza mais claro. */
+.ctrl-linha.secundaria label { color: var(--cor-texto-suave); font-size: 0.84rem; }
+.ctrl-linha.secundaria input { accent-color: #8b97a5; }
+.temas-lista { margin: 2px 0 10px 0; padding-left: 24px; }
+.tema-linha { align-items: flex-start; }
+.tema-linha label { align-items: flex-start; line-height: 1.3; }
+.tema-linha .tema-cor { margin-top: 6px; }
+.btn-enquadrar { width: 100%; margin: 0; padding: 7px 10px; font-size: 0.82rem; }
+.aux-grupo label.rotulo-slider, .rotulo-slider { display: block; font-size: 0.8rem; color: var(--cor-texto-suave); margin: 8px 0 2px 0; }
+
+.aux-grupo { padding: 10px 12px 4px 12px; margin: 0 0 10px 0; }
+.aux-grupo h4 {
+  margin: 0 0 8px 0; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--cor-texto-suave);
+}
+.aux-grupo label { display: inline-flex; align-items: center; gap: 7px; flex-wrap: wrap; }
+.aux-sub { margin: -2px 0 10px 24px; padding-left: 10px; border-left: 2px solid var(--borda-grupo); }
+.aux-sub .checkbox-row { margin-bottom: 6px; }
+.aux-sub .checkbox-row label { font-size: 0.82rem; color: var(--cor-texto-suave); }
+.aux-sub input[type="range"] { width: 100%; accent-color: var(--cor-primaria); margin: 0 0 6px 0; }
+.aux-status { font-size: 0.72rem; color: var(--cor-texto-suave); font-style: italic; }
+.aux-status.erro { color: #a3241b; font-style: normal; }
+
+/* Símbolos de legenda (linha, área, ponto) usados no menu e nas legendas */
+.sim-linha { display: inline-block; width: 18px; height: 0; flex-shrink: 0; vertical-align: middle; }
+.sim-area { display: inline-block; width: 16px; height: 11px; border: 1.5px solid; border-radius: 2px; flex-shrink: 0; vertical-align: middle; }
+.sim-area.hach { background-image: repeating-linear-gradient(135deg, currentColor 0 1.5px, transparent 1.5px 4px); }
+.sim-ponto { display: inline-block; margin: 0 4px; width: 10px; height: 10px; border-radius: 50%; border: 1.5px solid #fff; box-shadow: 0 0 0 1px rgba(0,0,0,.25); flex-shrink: 0; }
+.sim-ponto.q { border-radius: 1px; transform: rotate(45deg); width: 9px; height: 9px; }
+.legend-sub { font-size: 0.72rem; font-weight: 700; margin: 6px 0 2px 0; color: var(--cor-texto-suave); }
+.legend-link { background: none; border: none; padding: 0; font: inherit; font-size: 0.75rem; color: var(--cor-primaria); text-decoration: underline; cursor: pointer; }
+.legenda-sub { margin-top: 20px; }
+.legenda-zoneamento .legend-row { display: flex; align-items: center; font-size: 0.8rem; margin-bottom: 5px; line-height: 1.25; }
+
+/* Relatório: listas do bloco Território */
+.rel-lista { margin: 2px 0 8px 0; padding-left: 18px; font-size: 0.82rem; }
+.rel-lista li { margin-bottom: 2px; }
+.rel-zona { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: middle; }
 
 /* ---- Ferramentas de desenho (medir e relatório) ---------------------- */
 .botoes-ferr { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; margin-bottom: 8px; }

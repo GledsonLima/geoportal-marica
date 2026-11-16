@@ -649,6 +649,7 @@ window.SIGWEB = window.SIGWEB || {};
   var rotulosAreas = true;
   var areaSelecionada = null;
   var ESTILOS_AREA = new Map();    // cache por combinação de temas ligados
+  var opacidadeAreas = 0.2;        // preenchimento das áreas por temática (controle no menu)
 
   function temaPorId(id) {
     for (var i = 0; i < temas.length; i++) if (temas[i].id === id) return temas[i];
@@ -667,7 +668,7 @@ window.SIGWEB = window.SIGWEB || {};
     if (ESTILOS_AREA.has(chave)) return ESTILOS_AREA.get(chave);
     var n = ids.length, st = [];
     // Preenchimento leve (a grade de risco continua visível por baixo)
-    st.push(new ol.style.Style({ fill: new ol.style.Fill({ color: rgba(corDoTema(ids[0]), 0.16) }) }));
+    st.push(new ol.style.Style({ fill: new ol.style.Fill({ color: rgba(corDoTema(ids[0]), opacidadeAreas) }) }));
     // Halo branco: separa o contorno colorido do mapa de fundo e da grade
     st.push(new ol.style.Style({ stroke: new ol.style.Stroke({ color: 'rgba(255,255,255,0.95)', width: n * 2.4 + 3.4 }) }));
     // Faixas: a primeira é a mais larga (fica por baixo), a última a mais fina
@@ -764,6 +765,25 @@ window.SIGWEB = window.SIGWEB || {};
 
   function areaPorNum(n) { return areasSource.getFeatureById(Number(n)); }
 
+  function setOpacidadeAreas(v) {
+    opacidadeAreas = Math.max(0, Math.min(1, Number(v)));
+    ESTILOS_AREA.clear();
+    areasLayer.changed();
+  }
+
+  /** Enquadra as áreas com algum tema ligado. Devolve quantas entraram no enquadramento. */
+  function enquadrarTemas() {
+    var ext = null, n = 0;
+    areasSource.getFeatures().forEach(function (f) {
+      if (!(f.get('temas') || []).some(function (t) { return temasVisiveis.has(t); })) return;
+      var e = f.getGeometry().getExtent();
+      ext = ext ? [Math.min(ext[0], e[0]), Math.min(ext[1], e[1]), Math.max(ext[2], e[2]), Math.max(ext[3], e[3])] : e.slice();
+      n++;
+    });
+    if (ext) map.getView().fit(ext, { padding: [40, 40, 40, 40], maxZoom: 15, duration: NS.menosMovimento() ? 0 : 450 });
+    return n;
+  }
+
   /** Quantas áreas têm cada tema (para o painel de camadas). */
   function contagemPorTema() {
     var c = {};
@@ -857,6 +877,7 @@ window.SIGWEB = window.SIGWEB || {};
     areasSource: areasSource, areasLayer: areasLayer, areasBaseLayer: areasBaseLayer,
     setAreasBaseVisiveis: setAreasBaseVisiveis,
     setOpacidadePreenchimento: setOpacidadePreenchimento,
+    setOpacidadeAreas: setOpacidadeAreas, enquadrarTemas: enquadrarTemas, pontoRotulo: pontoRotulo,
     polylabel: polylabel,
     carregarAreas: carregarAreas,
     temas: function () { return temas; },

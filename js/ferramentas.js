@@ -38,6 +38,12 @@ window.SIGWEB = window.SIGWEB || {};
   NS.atualizarRotuloFiltro = atualizarRotuloFiltro;
 
   function ligarFiltro() {
+    // Enter num dos campos aplica o filtro (mesmo efeito do botão Aplicar)
+    ['filter-min', 'filter-max'].forEach(function (id) {
+      $(id).addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') { e.preventDefault(); $('apply-filter').click(); }
+      });
+    });
     $('apply-filter').addEventListener('click', function () {
       var mn = $('filter-min').value, mx = $('filter-max').value;
       if (mn === '' && mx === '') { $('filter-status').textContent = 'Informe o mínimo, o máximo ou os dois.'; return; }

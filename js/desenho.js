@@ -282,8 +282,10 @@
     var distritos = distritos4326().filter(function (d) { return turf.booleanPointInPolygon(gj, d.gj); })
       .map(function (d) { return { nome: d.nome, pct: 100 }; });
 
+    status('Cruzando com bairros, UCs e zoneamento…');
+    var territorio = NS.aux ? await NS.aux.consultar(gj) : null;
     return { tipo: 'ponto', lon: c[0], lat: c[1], celula: cel, nCelulas: 1, valores: valores,
-             grupos: grupos, areas: areas, distritos: distritos };
+             grupos: grupos, areas: areas, distritos: distritos, territorio: territorio };
   }
 
   async function analisarArea(gj, status) {
@@ -362,7 +364,9 @@
     });
     distritos.sort(function (a, b) { return b.pct - a.pct; });
 
-    return { tipo: 'area', areaM2: areaM2, perimetroM: perim, nCelulas: cels.length, areaCoberta: areaCoberta,
+    status('Cruzando com bairros, UCs e zoneamento…');
+    var territorio = NS.aux ? await NS.aux.consultar(gj) : null;
+    return { tipo: 'area', territorio: territorio, areaM2: areaM2, perimetroM: perim, nCelulas: cels.length, areaCoberta: areaCoberta,
              valores: valores, distrib: distrib, minmax: minmax, grupos: grupos, areas: areas, distritos: distritos };
   }
 
@@ -443,7 +447,7 @@
       '</section>';
 
     return '<div class="rel-cabeca"><h3>Relatório do local</h3><p>' + resumo + '</p>' + (distr ? '<p>' + distr + '</p>' : '') + '</div>' +
-      '<div class="rel-grade">' + blocoRisco + blocoGrupos + blocoAreas + '</div>' +
+      '<div class="rel-grade">' + blocoRisco + blocoGrupos + blocoAreas + blocoTerritorio(r) + '</div>' +
       '<p class="rel-nota"><strong>Como ler.</strong> Valores do estudo de risco climático de Maricá na grade hexagonal H3 ' +
       '(células de ~0,015 km²). ' + (r.tipo === 'area'
         ? 'Para a área, cada valor é a média dos hexágonos ponderada pela parte de cada um que fica dentro do desenho; '
@@ -451,6 +455,35 @@
       'as classes seguem as quebras naturais (Jenks) de cada camada do estudo. Médias de áreas maiores suavizam os extremos: ' +
       'consulte também a distribuição por classe. Resultado indicativo, não substitui avaliação em campo. ' +
       'Gerado em ' + new Date().toLocaleString('pt-BR') + ' no SIGWEB SBN Maricá.</p>';
+  }
+
+  /** Bairros, UCs e zoneamento (camadas auxiliares). Parte ausente = script 07 não rodou. */
+  function blocoTerritorio(r) {
+    var t = r.territorio;
+    if (!t || (!t.bairros && !t.ucs && !t.zonas)) return '';
+    var area = r.tipo === 'area';
+    function pct(x) { return area ? ' <small>(' + num(Math.min(100, x.pct), 0) + '%)</small>' : ''; }
+    function lista(arr, fmt, vazio) {
+      if (!arr) return '<p class="rel-vazio">Camada indisponível nesta base.</p>';
+      if (!arr.length) return '<p class="rel-vazio">' + vazio + '</p>';
+      return '<ul class="rel-lista">' + arr.map(function (x) { return '<li>' + fmt(x) + pct(x) + '</li>'; }).join('') + '</ul>';
+    }
+    var macro = t.zonas ? t.zonas.filter(function (z) { return z.tipo === 'macrozona'; }) : null;
+    var esp = t.zonas ? t.zonas.filter(function (z) { return z.tipo !== 'macrozona'; }) : null;
+    return '<section class="rel-bloco"><h4>Território</h4>' +
+      '<div class="rel-sub">Bairro' + (t.bairros && t.bairros.length > 1 ? 's' : '') + '</div>' +
+      lista(t.bairros, function (b) { return esc(b.nome); }, 'Fora dos limites de bairro.') +
+      '<div class="rel-sub">Unidades de Conservação</div>' +
+      lista(t.ucs, function (u) { return esc(u.nome) + ' <small>· ' + esc(u.grupo || '') + (u.esfera ? ', ' + esc(u.esfera.toLowerCase()) : '') + '</small>'; },
+            'Não está em Unidade de Conservação.') +
+      '<div class="rel-sub">Zoneamento (LC nº 400/2025)</div>' +
+      lista(macro, function (z) {
+        return '<span class="rel-zona" style="background:' + NS.aux.cor(z.sigla) + '"></span><strong>' + esc(z.sigla) + '</strong> ' + esc(z.zona);
+      }, 'Fora das macrozonas mapeadas.') +
+      (esp && esp.length ? '<div class="rel-sub">Áreas especiais</div>' + lista(esp, function (z) {
+        return '<strong>' + esc(z.sigla) + '</strong> ' + esc(z.nome || z.zona);
+      }, '') : '') +
+      '</section>';
   }
 
   function radarConfig(r) {
@@ -545,6 +578,7 @@
     '.rel-tr-barra td{border-bottom:none;padding-top:0}.rel-tema{display:inline-flex;align-items:center;gap:5px;border:1px solid;border-radius:999px;padding:1px 8px;font-size:.78rem;margin:1px}' +
     '.rel-tema i{width:9px;height:9px;border-radius:50%;display:inline-block;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
     '.rel-radar img{max-width:420px;width:100%;display:block;margin:0 auto}.rel-nota{font-size:.78rem;color:#5b6b7b;margin-top:16px}.rel-vazio{color:#5b6b7b}' +
+    '.rel-lista{margin:2px 0 8px;padding-left:18px;font-size:.88rem}.rel-zona{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:middle;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
     'footer{font-size:.75rem;color:#8396a8;margin-top:20px;border-top:1px solid #dde3e9;padding-top:8px}';
 
   function documentoHTML(imprimir) {
@@ -593,6 +627,12 @@
       L.push(['area_prioritaria', 'area ' + a.num, r.tipo === 'area' ? a.sobre_ha.toFixed(4) : '',
               a.temas.map(function (id) { var t = M.temaPorId(id); return t ? t.nome_curto : id; }).join(' | ')]);
     });
+    var t = r.territorio;
+    if (t) {
+      (t.bairros || []).forEach(function (b) { L.push(['bairro', b.nome, r.tipo === 'area' ? b.pct.toFixed(1) : '', r.tipo === 'area' ? '% da area' : '']); });
+      (t.ucs || []).forEach(function (u) { L.push(['unidade_conservacao', u.nome, r.tipo === 'area' ? u.pct.toFixed(1) : '', u.grupo || '']); });
+      (t.zonas || []).forEach(function (z) { L.push(['zoneamento', z.sigla + ' - ' + (z.nome || z.zona), r.tipo === 'area' ? z.pct.toFixed(1) : '', z.tipo]); });
+    }
     var q = function (v) { v = v == null ? '' : String(v); return /[",;\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
     return '﻿' + L.map(function (l) { return l.map(q).join(','); }).join('\n');
   }

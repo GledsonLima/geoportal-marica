@@ -3,7 +3,7 @@
 > Antes chamado "Geoportal — Mapeamento de Risco Climático de Maricá-RJ".
 > A v3.0.0 traz a identidade SIGWEB SBN Maricá: barra superior com logo e busca,
 > faixa vertical de ícones com painéis, novos mapas base e o código dividido por assunto.
-> A v3.3.0 inclui as quatro camadas do índice, as áreas prioritárias, as fichas de SbN, medir e o relatório do local (Passos 7 a 9).
+> A v3.4.0 inclui as quatro camadas do índice, as áreas prioritárias, as fichas de SbN, medir, o relatório do local e as camadas auxiliares (Passos 7 a 10).
 
 
 Versão em nuvem do geoportal: **banco e API no Supabase** + **site estático no GitHub Pages**.
@@ -319,6 +319,62 @@ o menu **Sobre**.
 **Fichas** — assumem os tons do tema (roxo em Saneamento Ecológico, verde em Infraestrutura Verde
 etc.; a cor do banco é escurecida só o necessário para manter o contraste AA). Os avisos de "em
 elaboração" saíram: campo vazio simplesmente não aparece, e sem ilustração a coluna dela some.
+
+## Passo 10 — Camadas Auxiliares e ajustes do menu (v3.4.0)
+
+### 10.1 Banco: quatro scripts, um por camada (sem ogr2ogr)
+
+Os GeoPackages foram convertidos em SQL com a geometria embutida (WKB, EPSG:31983), como no
+script 06. **No Supabase → SQL Editor, abra cada arquivo, copie tudo, cole e rode**, um de cada vez.
+A ordem não importa e todos podem ser rodados de novo sem duplicar nada.
+
+| Script | Tamanho | Conferência esperada (última consulta do arquivo) |
+|---|---|---|
+| `supabase/07a_bairros.sql` | ~370 KB | bairros **50** · geom_invalidas **0** · sem_geom_web **0** |
+| `supabase/07b_unidades_conservacao.sql` | ~860 KB | ucs **8** · geom_invalidas **0** · sem_geom_web **0** |
+| `supabase/07c_corpos_hidricos.sql` | ~260 KB | poligonos **189** · com_nome **9** · geom_invalidas **0** |
+| `supabase/07d_zoneamento.sql` | ~1,3 MB | poligonos **94** · pontos **13** · trechos_viarios **127** · geom_invalidas **0** |
+
+O 07d mostra também uma tabela com os polígonos por zona (AEIS 58, Orla 9 …).
+
+> Se o SQL Editor travar ao colar o 07d (o maior), avise: ele pode ser dividido em dois.
+
+Cada tabela guarda a geometria **original** (`geom`, 31983, para o QGIS e análises) e uma
+**simplificada para a web** (`geom_web`, 4326, tolerância de 1,5 a 3 m). O site lê tudo por uma
+única função, `camada_auxiliar(p_camada)`, que compara o nome com uma lista fixa (nenhum texto
+do visitante vira SQL) e devolve GeoJSON com 6 casas decimais (~10 cm). RLS de leitura; escrita
+revogada.
+
+Detalhes tratados na carga: os bairros vinham como *MultiSurface/CompoundCurve* (geometria curva
+do ArcGIS) e passam por `ST_CurveToLine`; os pontos do zoneamento vinham com altitude (KML) e
+passam por `ST_Force2D`; tudo passa por `ST_MakeValid`. Nomes de bairro saem em maiúsculas e
+minúsculas ("São José do Imbassaí"); o original fica em `nome_original`.
+
+### 10.2 Site
+Suba `index.html`, `css`, `js` (há um arquivo novo: `js/auxiliares.js`) e `img`; Ctrl+F5.
+Se o site for publicado antes dos scripts 07, as camadas auxiliares mostram
+"indisponível — rode o script 07 no banco" e o resto funciona.
+
+### O que mudou
+- **Camadas Auxiliares** (substitui "Limites"): *Divisão administrativa* (limites distritais e
+  bairros) e *Referências territoriais* (Unidades de Conservação, Zoneamento e Corpos hídricos).
+  Cada camada só é baixada na primeira vez que é ligada. **"Mostrar rótulos"** vale para todas,
+  inclusive os distritos; alguns rótulos só aparecem ao aproximar, para não poluir a escala do município.
+- **Simbologia:** bairros em tracejado lilás; UCs só contorno (contínuo = proteção integral,
+  tracejado = uso sustentável); corpos hídricos em azul translúcido (áreas úmidas em verde-água
+  tracejado), com nome em itálico; **zoneamento** com macrozonas a 50% (controle de opacidade),
+  áreas especiais (AEIS, AEIA, AEID, APA) hachuradas por cima, pontos de interesse pesqueiro
+  (círculo) e indígena (losango) e hierarquia viária (espessura pela classe; tracejado = abertura
+  prevista; pontilhado = pavimentação). A legenda completa do zoneamento fica no menu **Legenda**.
+- **Temas Estratégicos de Adaptação Climática:** nomes completos, recuados; "Exibir identificação
+  das áreas" logo abaixo de "Exibir as áreas por temática"; ferramentas próprias (opacidade do
+  preenchimento das áreas e *Enquadrar áreas da temática*).
+- Caixas dos grupos com fundo levemente acinzentado e sombra leve (variante rosada disponível em
+  `css/estilo.css`, variáveis `--fundo-grupo`/`--borda-grupo`); filete vermelho nas caixas de ferramentas.
+- Filtro: "Filtrando por indicador", com o indicador na linha de baixo; **Enter** aplica.
+- Botões ⓘ menores.
+- **Relatório do local** ganhou o bloco *Território*: bairro(s), Unidade(s) de Conservação e
+  macrozona/áreas especiais tocados, com a porcentagem da área desenhada (também no CSV).
 
 ## Atualizar o site depois de receber uma versão nova
 
